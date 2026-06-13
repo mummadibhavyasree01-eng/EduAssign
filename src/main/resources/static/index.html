@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduAssign Redirecting...</title>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            const currentUser = JSON.parse(sessionStorage.getItem('currentUser'));
+            if (!currentUser) {
+                window.location.href = 'login.html';
+            } else {
+                const role = currentUser.role.toUpperCase();
+                if (role === 'SUPERADMIN') {
+                    window.location.href = 'superadmin.html';
+                } else if (role === 'ADMIN') {
+                    window.location.href = 'admin.html';
+                } else {
+                    window.location.href = 'faculty.html';
+                }
+            }
+        });
+    </script>
+</head>
+<body style="background: #090d16; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;">
+    <div style="text-align: center;">
+        <h2 style="font-weight: 300; margin-bottom: 10px;">Loading EduAssign...</h2>
+        <div style="width: 40px; height: 40px; border: 3px solid rgba(99, 102, 241, 0.3); border-top-color: #6366f1; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+    </div>
+    <style>
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</body>
+</html>

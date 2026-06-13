@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Faculty Dashboard - EduAssign</title>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/faculty.css">
+</head>
+<body>
+  <div class="faculty-layout">
+    <!-- Navbar Header -->
+    <header class="navbar glass-panel">
+      <div class="navbar-brand">
+        <i class="fas fa-graduation-cap"></i>
+        <span>EduAssign Faculty</span>
+      </div>
+      <div class="navbar-actions">
+        <div class="user-chip">
+          <div class="avatar-sm">F</div>
+          <div class="user-meta">
+            <span id="nav-user-name">Faculty Member</span>
+            <small id="nav-user-role">Role: Faculty</small>
+          </div>
+        </div>
+        <!-- Admin Back Link (visible only to admins visiting this page) -->
+        <a href="admin.html" id="back-to-admin" class="btn btn-ghost" style="display: none; border-color: rgba(99,102,241,0.4); color: var(--primary)">
+          <i class="fas fa-arrow-left"></i> Admin Panel
+        </a>
+        <button class="btn btn-ghost" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-container">
+      
+      <!-- Deadline notification banner -->
+      <div class="glass-panel info-banner" id="deadline-banner" style="display: none;">
+        <div class="banner-icon"><i class="fas fa-bullhorn animate-pulse"></i></div>
+        <div class="banner-body">
+          <h4 id="deadline-banner-title">Subject Preference Selection Period Active</h4>
+          <p id="deadline-banner-message">Please select your preferred subjects. You can update your choices until the deadline.</p>
+          <div class="countdown-clock" id="deadline-timer">Remaining: --d --h --m</div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        
+        <!-- Left Side: Profile Card & Allocated Subjects -->
+        <div class="left-column">
+          <!-- Profile Card -->
+          <div class="glass-panel profile-card">
+            <h3>Update Profile</h3>
+            <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Manage your account details and password.</p>
+            <form id="profile-form">
+              <div class="input-wrapper">
+                <input type="text" id="profile-name" placeholder=" " required>
+                <label for="profile-name"><i class="fas fa-user"></i> Full Name</label>
+              </div>
+              <div class="input-wrapper">
+                <input type="email" id="profile-email" placeholder=" " required autocomplete="username">
+                <label for="profile-email"><i class="fas fa-envelope"></i> Email Address</label>
+              </div>
+              <div class="input-wrapper">
+                <input type="password" id="profile-password" placeholder=" " required autocomplete="new-password">
+                <label for="profile-password"><i class="fas fa-lock"></i> New Password</label>
+              </div>
+              <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Save Profile
+              </button>
+            </form>
+          </div>
+
+          <!-- Allocated Subjects Card -->
+          <div class="glass-panel allocation-card" style="margin-top: 20px;">
+            <h3>Allocated Subjects</h3>
+            <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Final assigned classes allocated by the administrator.</p>
+            
+            <div id="allocation-list-container">
+              <div class="no-allocations">
+                <i class="fas fa-calendar-alt"></i>
+                <p>No subjects allocated yet. Subject allocations are performed after the selection window closes.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Side: Preferences selection box -->
+        <div class="right-column">
+          <div class="glass-panel selection-card">
+            <div class="card-header">
+              <h3>Subject Preference Selection</h3>
+              <span class="status-badge" id="selection-status-badge">Checking...</span>
+            </div>
+            <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Tick the checkboxes of the subjects you prefer to teach in the coming term.</p>
+            
+            <div class="search-box-wrapper" style="margin-bottom: 16px;">
+              <i class="fas fa-search search-icon"></i>
+              <input type="text" id="subject-search" class="form-control" placeholder="Search subjects by name or code...">
+            </div>
+
+            <form id="preferences-form">
+              <div class="subject-selection-list" id="subject-checkboxes-container">
+                <div style="text-align: center; color: var(--text-muted); padding: 30px;">
+                  <i class="fas fa-circle-notch fa-spin"></i> Loading subjects...
+                </div>
+              </div>
+              
+              <button type="submit" class="btn btn-primary btn-block" id="preferences-submit-btn" style="margin-top: 20px;" disabled>
+                <i class="fas fa-save"></i> Save Subject Preferences
+              </button>
+            </form>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/common.js"></script>
+  <script src="js/faculty.js"></script>
+</body>
+</html>

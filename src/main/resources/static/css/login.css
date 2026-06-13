@@ -1,0 +1,130 @@
+/* Styles specific to the login page */
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 24px;
+  position: relative;
+  background: var(--bg-gradient);
+  overflow: hidden;
+}
+
+/* Glowing background orbs */
+.login-container::before,
+.login-container::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  z-index: 0;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.login-container::before {
+  width: 400px;
+  height: 400px;
+  background: var(--primary);
+  top: -100px;
+  left: -100px;
+  animation: floatOrb 12s infinite alternate ease-in-out;
+}
+
+.login-container::after {
+  width: 350px;
+  height: 350px;
+  background: var(--secondary);
+  bottom: -50px;
+  right: -50px;
+  animation: floatOrb 10s infinite alternate-reverse ease-in-out;
+}
+
+@keyframes floatOrb {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(30px) scale(1.15); }
+}
+
+.login-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 40px;
+  z-index: 10;
+  position: relative;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.logo-area {
+  width: 68px;
+  height: 68px;
+  background: var(--primary-gradient);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px auto;
+  box-shadow: 0 8px 20px -4px rgba(99, 102, 241, 0.5);
+  font-size: 2rem;
+  color: #fff;
+}
+
+.login-header h1 {
+  font-size: 2.15rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  letter-spacing: -0.025em;
+  background: linear-gradient(135deg, #fff 30%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.login-header p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+/* Floating label adjustments with icons */
+.input-wrapper .icon-prefix {
+  margin-right: 6px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 16px;
+  top: 18px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: var(--transition-smooth);
+  z-index: 10;
+}
+
+.password-toggle:hover {
+  color: var(--text-main);
+}
+
+.btn-block {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.portal-footer {
+  text-align: center;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.portal-footer p {
+  font-size: 0.82rem;
+  color: var(--text-disabled);
+}

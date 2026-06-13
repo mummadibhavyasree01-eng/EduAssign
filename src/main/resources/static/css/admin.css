@@ -1,0 +1,337 @@
+/* CSS for Admin Dashboard */
+
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 100vh;
+}
+
+/* Sidebar Styles */
+.sidebar {
+  margin: 16px;
+  margin-right: 8px;
+  padding: 32px 20px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 32px);
+  position: sticky;
+  top: 16px;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin-bottom: 30px;
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.sidebar-brand i {
+  color: var(--primary);
+  -webkit-text-fill-color: initial;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-grow: 1;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 500;
+  border-radius: var(--border-radius-md);
+  transition: var(--transition-smooth);
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+}
+
+.nav-item.active {
+  background: rgba(99, 102, 241, 0.12);
+  color: #fff;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+}
+
+/* Main Content Styles */
+.main-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  height: 100vh;
+}
+
+.main-header {
+  padding: 20px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.main-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.main-header p {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.header-profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatar-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--primary-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.profile-info h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.profile-info span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Tab Content Visibility */
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.section-container {
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.section-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-actions h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.section-actions p {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* Search bar styling */
+.search-bar-wrapper {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.search-bar-wrapper input {
+  padding-left: 44px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 16px;
+  top: 14px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+/* Grid Layouts for Tabs */
+.tab-grid {
+  display: grid;
+  grid-template-columns: 2.2fr 1fr;
+  gap: 20px;
+}
+
+.col-span-2 {
+  grid-column: span 2;
+}
+.col-span-3 {
+  grid-column: span 1 / span 3;
+}
+
+@media (min-width: 1200px) {
+  .col-span-3 {
+    grid-column: span 1;
+  }
+}
+
+/* File Dropzones */
+.file-dropzone {
+  border: 2px dashed var(--panel-border);
+  border-radius: var(--border-radius-lg);
+  padding: 30px 20px;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.file-dropzone.dragover {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.file-icon {
+  font-size: 2.25rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  transition: var(--transition-smooth);
+}
+
+.file-dropzone:hover .file-icon {
+  color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.file-dropzone p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.file-name-display {
+  font-size: 0.78rem;
+  color: var(--secondary);
+  font-weight: 500;
+  display: block;
+  word-break: break-all;
+}
+
+/* Config Grid */
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* Profile Form styling */
+.profile-card {
+  max-width: 600px;
+  padding: 32px;
+}
+
+/* Deadline status */
+.status-box {
+  background: rgba(15, 23, 42, 0.3);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--border-radius-md);
+  padding: 20px;
+  margin-top: 15px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.status-badge.active {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.status-badge.expired {
+  background: rgba(244, 63, 94, 0.12);
+  color: var(--error);
+  border: 1px solid rgba(244, 63, 94, 0.2);
+}
+
+/* Allocation Workspace Grid */
+.allocation-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 20px;
+}
+
+/* Preferences preview list */
+.preferences-preview {
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--border-radius-md);
+  padding: 12px 16px;
+}
+
+/* Action button icons styling */
+.action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: var(--border-radius-sm);
+  transition: var(--transition-smooth);
+}
+.action-btn-edit {
+  color: var(--secondary);
+}
+.action-btn-edit:hover {
+  background: rgba(20, 184, 166, 0.1);
+}
+.action-btn-delete {
+  color: var(--error);
+}
+.action-btn-delete:hover {
+  background: rgba(244, 63, 94, 0.1);
+}
+
+@media (max-width: 992px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    height: auto;
+    position: static;
+    margin-right: 16px;
+  }
+  .tab-grid, .config-grid, .allocation-grid {
+    grid-template-columns: 1fr;
+  }
+  .col-span-3, .col-span-2 {
+    grid-column: span 1;
+  }
+}

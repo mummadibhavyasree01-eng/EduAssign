@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Admin Dashboard - EduAssign</title>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/superadmin.css">
+</head>
+<body>
+  <div class="dashboard-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar glass-panel">
+      <div class="sidebar-brand">
+        <i class="fas fa-shield-halved"></i>
+        <span>EduAssign SA</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-target="users-section">
+          <i class="fas fa-users-gear"></i>
+          <span>Manage Roles</span>
+        </a>
+        <a href="#" class="nav-item" data-target="profile-section">
+          <i class="fas fa-user-shield"></i>
+          <span>My Profile</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn btn-ghost btn-block" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i>
+          <span>Logout</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <header class="main-header glass-panel">
+        <div>
+          <h2>Super Admin Portal</h2>
+          <p id="header-subtitle">System-wide role permissions management</p>
+        </div>
+        <div class="header-profile">
+          <div class="avatar-icon">SA</div>
+          <div class="profile-info">
+            <h4 id="header-user-name">Super Admin</h4>
+            <span id="header-user-email">superadmin@gmail.com</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Users Management Section -->
+      <section id="users-section" class="tab-content active">
+        <div class="glass-panel section-container">
+          <div class="section-header">
+            <h3>User Role Configurations</h3>
+            <p>Modify privilege levels (ADMIN &lt;-&gt; FACULTY) for all platform members</p>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>User ID</th>
+                  <th>Full Name</th>
+                  <th>Email ID</th>
+                  <th>Current Role</th>
+                  <th style="text-align: right;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body">
+                <tr>
+                  <td colspan="5" style="text-align: center; color: var(--text-muted);">
+                    <i class="fas fa-circle-notch fa-spin"></i> Loading users list...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Profile Section -->
+      <section id="profile-section" class="tab-content">
+        <div class="glass-panel profile-card">
+          <div class="section-header">
+            <h3>Update Profile</h3>
+            <p>Modify your administrative account details</p>
+          </div>
+          <form id="profile-form">
+            <div class="input-wrapper">
+              <input type="text" id="profile-name" placeholder=" " required>
+              <label for="profile-name"><i class="fas fa-user"></i> Full Name</label>
+            </div>
+            <div class="input-wrapper">
+              <input type="email" id="profile-email" placeholder=" " required autocomplete="username">
+              <label for="profile-email"><i class="fas fa-envelope"></i> Email Address</label>
+            </div>
+            <div class="input-wrapper">
+              <input type="password" id="profile-password" placeholder=" " required autocomplete="new-password">
+              <label for="profile-password"><i class="fas fa-lock"></i> New Password</label>
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i>
+              <span>Save Changes</span>
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/common.js"></script>
+  <script src="js/superadmin.js"></script>
+</body>
+</html>
