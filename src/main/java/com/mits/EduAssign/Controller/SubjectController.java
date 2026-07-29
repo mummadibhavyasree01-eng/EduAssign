@@ -27,7 +27,14 @@ public class SubjectController {
     @PostMapping("/add")
     public ResponseEntity<?> addSubject(
             @RequestBody Subject subject) {
-
+        if (subject.getId() == null || subject.getId().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Subject code is required");
+        }
+        if (subjectService.viewSubjectById(subject.getId().trim()) != null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("Already there is a subject with that subjectcode");
+        }
+        subject.setId(subject.getId().trim());
         return ResponseEntity.ok(
                 subjectService.addSubject(subject));
     }

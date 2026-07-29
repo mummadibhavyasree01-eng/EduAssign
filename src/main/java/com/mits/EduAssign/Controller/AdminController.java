@@ -20,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.mits.EduAssign.Entity.AdminFaculty;
 import com.mits.EduAssign.Entity.SubjectAllocation;
+import com.mits.EduAssign.Entity.SectionAllocation;
 import com.mits.EduAssign.Service.AdminService;
 import com.mits.EduAssign.Service.SubjectService;
 
@@ -73,14 +74,7 @@ public class AdminController {
 	    }
 	    @GetMapping("/viewfaculty")
 	    public ResponseEntity<?> viewFaculty() {
-
-	        List<AdminFaculty> facultyList =
-	                adminService.viewFaculty();
-
-	        if (facultyList.isEmpty()) {
-	            return ResponseEntity.ok("No Faculty Found");
-	        }
-
+	        List<AdminFaculty> facultyList = adminService.viewFaculty();
 	        return ResponseEntity.ok(facultyList);
 	    }
 	    @PutMapping("/updateFaculty/{id}")
@@ -161,8 +155,11 @@ public class AdminController {
 	    @PostMapping("/deadline")
 	    public ResponseEntity<?> setDeadline(
 	            @RequestParam String message,
-	            @RequestParam int days) {
-	        return ResponseEntity.ok(subjectService.setDeadline(message, days));
+	            @RequestParam int days,
+	            @RequestParam(required = false) Integer sem,
+	            @RequestParam String academicYear,
+	            @RequestParam String department) {
+	        return ResponseEntity.ok(subjectService.setDeadline(message, days, sem, academicYear, department));
 	    }
 
 	    @GetMapping("/deadline")
@@ -195,6 +192,81 @@ public class AdminController {
 	            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Allocation Not Found");
 	        }
 	        return ResponseEntity.ok("Allocation Deleted Successfully");
+	    }
+
+	    @PostMapping("/allocate-section")
+	    public ResponseEntity<?> allocateSection(
+	            @RequestBody SectionAllocation allocation) {
+	        try {
+	            SectionAllocation saved = subjectService.allocateSection(allocation);
+	            return ResponseEntity.ok(saved);
+	        } catch (IllegalStateException e) {
+	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+	        } catch (IllegalArgumentException e) {
+	            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+	        }
+	    }
+
+	    @GetMapping("/section-allocations")
+	    public ResponseEntity<?> getAllSectionAllocations() {
+	        return ResponseEntity.ok(subjectService.getAllSectionAllocations());
+	    }
+
+	    @DeleteMapping("/section-allocation/{id}")
+	    public ResponseEntity<?> deleteSectionAllocation(@PathVariable Long id) {
+	        boolean deleted = subjectService.deleteSectionAllocation(id);
+	        if (!deleted) {
+	            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Section Allocation Not Found");
+	        }
+	        return ResponseEntity.ok("Section Allocation Deleted Successfully");
+	    }
+
+	    @PostMapping("/finalize-allocations")
+	    public ResponseEntity<?> finalizeAllocations() {
+	        subjectService.finalizeAllocations();
+	        return ResponseEntity.ok("Allocations finalized successfully");
+	    }
+
+	    @GetMapping("/is-finalized")
+	    public ResponseEntity<?> isAllocationsFinalized() {
+	        return ResponseEntity.ok(subjectService.isAllocationsFinalized());
+	    }
+
+	    @PostMapping("/stop-deadline")
+	    public ResponseEntity<?> stopDeadline() {
+	        subjectService.stopDeadline();
+	        return ResponseEntity.ok("Deadline stopped successfully");
+	    }
+
+	    @GetMapping("/no-preferences-faculty")
+	    public ResponseEntity<?> getFacultyWithNoPreferences() {
+	        return ResponseEntity.ok(subjectService.getFacultyWithNoPreferences());
+	    }
+
+	    @PostMapping("/auto-allocate")
+	    public ResponseEntity<?> autoAllocateSubjects() {
+	        try {
+	            return ResponseEntity.ok(subjectService.autoAllocateSubjects());
+	        } catch (IllegalStateException e) {
+	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+	        } catch (Exception e) {
+	            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error performing auto-allocation: " + e.getMessage());
+	        }
+	    }
+
+	    @PostMapping("/history/upload")
+	    public ResponseEntity<?> uploadAllocationHistory(@RequestParam("file") MultipartFile file) {
+	        try {
+	            subjectService.uploadAllocationHistory(file);
+	            return ResponseEntity.ok("Allocation History uploaded successfully");
+	        } catch (Exception e) {
+	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error uploading history: " + e.getMessage());
+	        }
+	    }
+
+	    @GetMapping("/history/all")
+	    public ResponseEntity<?> getAllAllocationHistory() {
+	        return ResponseEntity.ok(subjectService.getAllHistory());
 	    }
 }
 

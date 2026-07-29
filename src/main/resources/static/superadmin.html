@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Stylesheets -->
   <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/admin.css">
   <link rel="stylesheet" href="css/superadmin.css">
 </head>
 <body>
@@ -22,6 +23,14 @@
         <a href="#" class="nav-item active" data-target="users-section">
           <i class="fas fa-users-gear"></i>
           <span>Manage Roles</span>
+        </a>
+        <a href="#" class="nav-item" data-target="faculty-section">
+          <i class="fas fa-users"></i>
+          <span>Faculty Directory</span>
+        </a>
+        <a href="#" class="nav-item" data-target="report-section">
+          <i class="fas fa-file-invoice"></i>
+          <span>Allocation Report</span>
         </a>
         <a href="#" class="nav-item" data-target="profile-section">
           <i class="fas fa-user-shield"></i>
@@ -82,6 +91,108 @@
         </div>
       </section>
 
+      <!-- Faculty Directory Section -->
+      <section id="faculty-section" class="tab-content">
+        <div class="tab-grid">
+          <div class="glass-panel section-container col-span-3">
+            <div class="section-actions">
+              <div>
+                <h3>Faculty List</h3>
+                <p>Add, update, and manage faculty member accounts</p>
+              </div>
+              <div class="action-buttons">
+                <button class="btn btn-primary" onclick="openFacultyModal()"><i class="fas fa-plus"></i> Add Faculty</button>
+              </div>
+            </div>
+            
+            <div class="search-bar-wrapper">
+              <i class="fas fa-search search-icon"></i>
+              <input type="text" id="faculty-search" class="form-control" placeholder="Search faculty by name, ID or email...">
+            </div>
+
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Faculty ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th style="text-align: right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="faculty-table-body">
+                  <tr><td colspan="4" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Faculty Excel Upload -->
+          <div class="glass-panel section-container">
+            <h3>Import Faculty</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Upload Excel file (.xlsx) with columns: <strong>Id, Name, Email</strong> (Row 1 is headers). Password will be set to 'faculty@mits' by default.</p>
+            
+            <form id="faculty-upload-form">
+              <div class="file-dropzone" id="faculty-dropzone">
+                <i class="fas fa-file-excel file-icon"></i>
+                <p>Drag & drop Faculty Excel sheet or click to browse</p>
+                <input type="file" id="faculty-excel-file" accept=".xlsx" style="display: none;">
+                <span class="file-name-display" id="faculty-file-name">No file chosen</span>
+              </div>
+              <button type="submit" class="btn btn-secondary btn-block" style="margin-top: 15px;">
+                <i class="fas fa-cloud-upload-alt"></i> Upload Faculty
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- Report Section -->
+      <section id="report-section" class="tab-content">
+        <div class="glass-panel section-container">
+          <div class="section-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+            <div>
+              <h3>Year-Wise Allocation Report</h3>
+              <p style="color: var(--text-muted); font-size: 0.9rem;">View all faculty details along with their allocated subjects and sections</p>
+            </div>
+            <div class="action-buttons" style="display: flex; gap: 12px; align-items: center;">
+              <span style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Select Year:</span>
+              <select id="report-year-select" class="form-control" style="width: auto; min-width: 150px; padding: 8px 12px; height: 40px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main);">
+                <!-- Filled dynamically -->
+              </select>
+              <button class="btn btn-secondary" onclick="exportReportToExcel()"><i class="fas fa-file-excel"></i> Export Report</button>
+            </div>
+          </div>
+          
+          <div class="search-bar-wrapper" style="margin-bottom: 20px; position: relative;">
+            <i class="fas fa-search search-icon" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+            <input type="text" id="report-search" class="form-control" placeholder="Search faculty by name, ID, or allocated subject..." style="padding-left: 44px;">
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Faculty ID</th>
+                  <th>Faculty Name</th>
+                  <th>Email ID</th>
+                  <th>Allocated Subject(s)</th>
+                  <th>Allocated Section(s)</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="report-table-body">
+                <tr>
+                  <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 12px; display: block;"></i> Loading report data...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <!-- Profile Section -->
       <section id="profile-section" class="tab-content">
         <div class="glass-panel profile-card">
@@ -110,6 +221,41 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- Faculty Modal -->
+  <div class="modal-overlay" id="faculty-modal">
+    <div class="modal-container glass-panel">
+      <div class="modal-header">
+        <h3 class="modal-title" id="faculty-modal-title">Add Faculty</h3>
+        <button class="modal-close" onclick="closeFacultyModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <form id="faculty-form">
+        <input type="hidden" id="faculty-modal-mode" value="add"> <!-- add or edit -->
+        <div class="modal-body">
+          <div class="input-wrapper">
+            <input type="text" id="fac-id" placeholder=" " required>
+            <label for="fac-id">Faculty ID</label>
+          </div>
+          <div class="input-wrapper">
+            <input type="text" id="fac-name" placeholder=" " required>
+            <label for="fac-name">Full Name</label>
+          </div>
+          <div class="input-wrapper">
+            <input type="email" id="fac-email" placeholder=" " required autocomplete="email">
+            <label for="fac-email">Email Address</label>
+          </div>
+          <div class="input-wrapper">
+            <input type="password" id="fac-password" placeholder=" " autocomplete="new-password">
+            <label for="fac-password">Password</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeFacultyModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="faculty-modal-btn">Add Faculty</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <!-- Scripts -->

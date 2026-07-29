@@ -10,6 +10,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.mits.EduAssign.Entity.AdminFaculty;
 import com.mits.EduAssign.Repository.AdminRepository;
@@ -17,20 +18,92 @@ import com.mits.EduAssign.Repository.AdminRepository;
 public class AdminService {
 @Autowired
 AdminRepository adminRepository;
+
+@Autowired
+private JdbcTemplate jdbcTemplate;
 	public AdminFaculty login(String email, String password) {
-		if (email == null) return null;
-		AdminFaculty user = adminRepository.findByEmailIgnoreCaseAndPassword(email.trim(), password);
-		if (user == null) {
-			// Fallback: allow logging in with faculty/admin ID directly
-			user = adminRepository.findById(email.trim()).orElse(null);
-			if (user != null && !password.equals(user.getPassword())) {
-				user = null;
+		if (email == null || password == null) return null;
+		String search = email.trim();
+		String pass = password.trim();
+
+		// 1. Direct email & password lookup
+		AdminFaculty user = adminRepository.findByEmailIgnoreCaseAndPassword(search, pass);
+		if (user != null) return user;
+
+		List<AdminFaculty> allUsers = adminRepository.findAll();
+
+		// 2. ID match (case-insensitive) & password match
+		for (AdminFaculty u : allUsers) {
+			if (u.getId() != null && u.getId().equalsIgnoreCase(search)) {
+				if (u.getPassword() != null && pass.equals(u.getPassword().trim())) {
+					return u;
+				}
 			}
 		}
-		return user;
+
+		// 3. Email match or Email prefix match (e.g. "faculty2" for "faculty2@gmail.com")
+		for (AdminFaculty u : allUsers) {
+			boolean emailMatches = u.getEmail() != null && (u.getEmail().equalsIgnoreCase(search) || u.getEmail().toLowerCase().startsWith(search.toLowerCase() + "@"));
+			if (emailMatches) {
+				if (u.getPassword() != null && pass.equals(u.getPassword().trim())) {
+					return u;
+				}
+			}
+		}
+
+		return null;
 	}
 	public AdminFaculty addFaculty(AdminFaculty faculty) {
-		
+		if (faculty == null || faculty.getId() == null || faculty.getId().trim().isEmpty()) {
+			throw new IllegalArgumentException("Faculty ID cannot be empty.");
+		}
+		String idTrim = faculty.getId().trim();
+		String emailTrim = (faculty.getEmail() != null) ? faculty.getEmail().trim() : "";
+
+		// Check if a user with this ID already exists
+		AdminFaculty existingById = adminRepository.findById(idTrim).orElse(null);
+		if (existingById != null) {
+			// Update the existing record with the same ID
+			existingById.setName(faculty.getName());
+			if (faculty.getEmail() != null) existingById.setEmail(faculty.getEmail());
+			if (faculty.getPassword() != null && !faculty.getPassword().trim().isEmpty()) {
+				existingById.setPassword(faculty.getPassword());
+			}
+			if (faculty.getRole() != null) existingById.setRole(faculty.getRole());
+			return adminRepository.save(existingById);
+		}
+
+		// Check if a user with this email already exists but has a different ID
+		if (!emailTrim.isEmpty()) {
+			List<AdminFaculty> all = adminRepository.findAll();
+			for (AdminFaculty existing : all) {
+				if (existing.getEmail() != null && existing.getEmail().equalsIgnoreCase(emailTrim)) {
+					String oldId = existing.getId();
+					String newId = idTrim;
+
+					System.out.println("Migrating email " + emailTrim + " from old ID " + oldId + " to new ID " + newId);
+
+					// Re-link references in other tables
+					jdbcTemplate.update("UPDATE faculty_subject_preference SET faculty_id = ? WHERE faculty_id = ?", newId, oldId);
+					jdbcTemplate.update("UPDATE subject_allocation SET faculty_id = ? WHERE faculty_id = ?", newId, oldId);
+					jdbcTemplate.update("UPDATE section_allocation SET faculty_id = ? WHERE faculty_id = ?", newId, oldId);
+					jdbcTemplate.update("UPDATE allocation_history SET faculty_id = ? WHERE faculty_id = ?", newId, oldId);
+
+					// Delete the old record
+					adminRepository.delete(existing);
+					adminRepository.flush();
+					break;
+				}
+			}
+		}
+
+		faculty.setId(idTrim);
+		if (faculty.getRole() == null || faculty.getRole().trim().isEmpty()) {
+			faculty.setRole("faculty");
+		}
+		if (faculty.getPassword() == null || faculty.getPassword().trim().isEmpty()) {
+			faculty.setPassword("faculty@mits");
+		}
 		return adminRepository.save(faculty);
 	}
 	
@@ -49,8 +122,9 @@ AdminRepository adminRepository;
 		    if(updatedFaculty.getEmail() != null)
 		        faculty.setEmail(updatedFaculty.getEmail());
 
-		    if(updatedFaculty.getPassword() != null)
-		        faculty.setPassword(updatedFaculty.getPassword());
+		    if (updatedFaculty.getPassword() != null && !updatedFaculty.getPassword().trim().isEmpty()) {
+		        faculty.setPassword(updatedFaculty.getPassword().trim());
+		    }
 		    
 		    faculty.setRole("faculty");
 		    return adminRepository.save(faculty);
@@ -59,6 +133,16 @@ AdminRepository adminRepository;
 
 	    if (!adminRepository.existsById(id)) {
 	        return false;
+	    }
+
+	    // Clean up preferences, allocations, and history referencing the deleted faculty ID
+	    try {
+	        jdbcTemplate.update("DELETE FROM faculty_subject_preference WHERE faculty_id = ?", id);
+	        jdbcTemplate.update("DELETE FROM subject_allocation WHERE faculty_id = ?", id);
+	        jdbcTemplate.update("DELETE FROM section_allocation WHERE faculty_id = ?", id);
+	        jdbcTemplate.update("DELETE FROM allocation_history WHERE faculty_id = ?", id);
+	    } catch (Exception e) {
+	        System.err.println("Error deleting faculty references: " + e.getMessage());
 	    }
 
 	    adminRepository.deleteById(id);
@@ -80,8 +164,9 @@ faculty.setName(updatedFaculty.getName());
 if(updatedFaculty.getEmail() != null)
 faculty.setEmail(updatedFaculty.getEmail());
 
-if(updatedFaculty.getPassword() != null)
-faculty.setPassword(updatedFaculty.getPassword());
+if (updatedFaculty.getPassword() != null && !updatedFaculty.getPassword().trim().isEmpty()) {
+    faculty.setPassword(updatedFaculty.getPassword().trim());
+}
 
 
 return adminRepository.save(faculty);
@@ -102,16 +187,19 @@ admin.setName(updatedAdmin.getName());
 if(updatedAdmin.getEmail() != null)
 admin.setEmail(updatedAdmin.getEmail());
 
-if(updatedAdmin.getPassword() != null)
-admin.setPassword(updatedAdmin.getPassword());
+if (updatedAdmin.getPassword() != null && !updatedAdmin.getPassword().trim().isEmpty()) {
+    admin.setPassword(updatedAdmin.getPassword().trim());
+}
 
 return adminRepository.save(admin);
 }
 	public List<AdminFaculty> viewFaculty() {
-		return adminRepository.findAll().stream()
+		List<AdminFaculty> list = adminRepository.findAll().stream()
 				.filter(user -> "faculty".equalsIgnoreCase(user.getRole()) || 
-				               ("ADMIN".equalsIgnoreCase(user.getRole()) && !"ADMIN01".equalsIgnoreCase(user.getId())))
+				               ("admin".equalsIgnoreCase(user.getRole()) && !"ADMIN01".equalsIgnoreCase(user.getId())))
 				.collect(java.util.stream.Collectors.toList());
+		list.sort(new NaturalOrderComparator());
+		return list;
 	}
 	public void uploadFaculty(MultipartFile file) {
 		    try {
@@ -122,21 +210,36 @@ return adminRepository.save(admin);
 		        Sheet sheet = workbook.getSheetAt(0);
 
 		        for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+		            try {
+		                Row row = sheet.getRow(i);
+		                if (row == null) {
+		                    continue;
+		                }
 
-		            Row row = sheet.getRow(i);
+		                String id = getCellValueAsString(row.getCell(0)).trim();
+		                String name = getCellValueAsString(row.getCell(1)).trim();
+		                String email = getCellValueAsString(row.getCell(2)).trim();
 
-		            if (row == null || row.getCell(0) == null) {
-		                continue;
+		                if (id.isEmpty() || name.isEmpty() || email.isEmpty()) {
+		                    continue; // Skip blank/empty/incomplete rows silently
+		                }
+
+		                AdminFaculty faculty = new AdminFaculty();
+		                faculty.setId(id);
+		                faculty.setName(name);
+		                faculty.setEmail(email);
+
+		                // Keep existing password if faculty already exists, otherwise default to "faculty@mits"
+		                AdminFaculty existing = adminRepository.findById(id).orElse(null);
+		                if (existing != null) {
+		                    faculty.setPassword(existing.getPassword());
+		                } else {
+		                    faculty.setPassword("faculty@mits");
+		                }
+		                addFaculty(faculty);
+		            } catch (Exception e) {
+		                System.err.println("Error importing Excel row " + i + ": " + e.getMessage());
 		            }
-
-		            AdminFaculty faculty = new AdminFaculty();
-
-		            faculty.setId(getCellValueAsString(row.getCell(0)));
-		            faculty.setName(getCellValueAsString(row.getCell(1)));
-		            faculty.setEmail(getCellValueAsString(row.getCell(2)));
-		            faculty.setPassword(getCellValueAsString(row.getCell(3)));
-		            faculty.setRole("faculty");		            
-                    adminRepository.save(faculty);
 		        }
 
 		        workbook.close();

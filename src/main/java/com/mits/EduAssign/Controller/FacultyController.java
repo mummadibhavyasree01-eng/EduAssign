@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.mits.EduAssign.Entity.AdminFaculty;
 import com.mits.EduAssign.Entity.FacultySubjectPreference;
-import com.mits.EduAssign.Entity.SubjectAllocation;
+import com.mits.EduAssign.Entity.SectionAllocation;
 import com.mits.EduAssign.Service.AdminService;
 import com.mits.EduAssign.Service.SubjectService;
 
@@ -43,8 +43,11 @@ public class FacultyController {
     }
 
     @GetMapping("/allocations/{facultyId}")
-    public ResponseEntity<List<SubjectAllocation>> getAllocations(@PathVariable String facultyId) {
-        return ResponseEntity.ok(subjectService.getAllocationsByFacultyId(facultyId));
+    public ResponseEntity<?> getAllocations(@PathVariable String facultyId) {
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("subjectAllocations", subjectService.getFinalizedSubjectAllocationsByFacultyId(facultyId));
+        result.put("sectionAllocations", subjectService.getFinalizedSectionAllocationsByFacultyId(facultyId));
+        return ResponseEntity.ok(result);
     }
 
     @PutMapping("/update")
@@ -54,5 +57,10 @@ public class FacultyController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Faculty Not Found");
         }
         return ResponseEntity.ok(faculty);
+    }
+
+    @GetMapping("/preferences/all")
+    public ResponseEntity<List<FacultySubjectPreference>> getAllPreferences() {
+        return ResponseEntity.ok(subjectService.getAllPreferences());
     }
 }

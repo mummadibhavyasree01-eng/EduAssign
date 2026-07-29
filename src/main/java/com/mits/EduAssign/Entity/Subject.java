@@ -10,51 +10,58 @@ public class Subject {
 	@Column(name="SubjectCode",nullable=false)
 	private String id;
 	@Column(name="SubjectName",nullable=false)
-private String name;
-		@Column(name="year",nullable=false)
+	private String name;
+	@Column(name="year",nullable=false)
 	private int year;
 	@Column(name="Semester",nullable=false)
-private int sem;
+	private int sem;
 	@Column(name="Regulation",nullable=false)
-private String regulation;
+	private String regulation;
 	@Column(name="Department",nullable=false)
-private String dep;
-public String getName() {
-	return name;
-}
-public void setName(String name) {
-	this.name = name;
-}
-public String getId() {
-	return id;
-}
-public void setId(String id) {
-	this.id= id;
-}
-public int getYear() {
-	return year;
-}
-public void setYear(int year) {
-	this.year = year;
-}
-public int getSem() {
-	return sem;
-}
-public void setSem(int sem) {
-	this.sem = sem;
-}
-public String getRegulation() {
-	return regulation;
-}
-public void setRegulation(String regulation) {
-	this.regulation = regulation;
-}
-public String getDep() {
-	return dep;
-}
-public void setDep(String dep) {
-	this.dep = dep;
-}
+	private String dep;
+	@Column(name="AcademicYear")
+	private String academicYear;
 
+	public String getName() {
+		return name;
+	}
+	public void setName(String name) {
+		this.name = name;
+	}
+	public String getId() {
+		return id;
+	}
+	public void setId(String id) {
+		this.id = id;
+	}
+	public int getYear() {
+		return year;
+	}
+	public void setYear(int year) {
+		this.year = year;
+	}
+	public int getSem() {
+		return sem;
+	}
+	public void setSem(int sem) {
+		this.sem = sem;
+	}
+	public String getRegulation() {
+		return regulation;
+	}
+	public void setRegulation(String regulation) {
+		this.regulation = regulation;
+	}
+	public String getDep() {
+		return dep;
+	}
+	public void setDep(String dep) {
+		this.dep = dep;
+	}
+	public String getAcademicYear() {
+		return academicYear;
+	}
+	public void setAcademicYear(String academicYear) {
+		this.academicYear = academicYear;
+	}
 }
-

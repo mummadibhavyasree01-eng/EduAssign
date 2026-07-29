@@ -4,14 +4,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import com.mits.EduAssign.Entity.AdminFaculty;
-import com.mits.EduAssign.Entity.Department;
-import com.mits.EduAssign.Entity.AcademicYear;
-import com.mits.EduAssign.Entity.Section;
+import com.mits.EduAssign.Entity.Semester;
 import com.mits.EduAssign.Repository.AdminRepository;
-import com.mits.EduAssign.Repository.DepartmentRepository;
-import com.mits.EduAssign.Repository.AcademicYearRepository;
-import com.mits.EduAssign.Repository.SectionRepository;
+import com.mits.EduAssign.Repository.SemesterRepository;
 
 @Component
 public class DatabaseInitializer implements CommandLineRunner {
@@ -20,81 +17,133 @@ public class DatabaseInitializer implements CommandLineRunner {
     private AdminRepository adminRepository;
 
     @Autowired
-    private DepartmentRepository departmentRepository;
+    private SemesterRepository semesterRepository;
 
     @Autowired
-    private AcademicYearRepository academicYearRepository;
-
-    @Autowired
-    private SectionRepository sectionRepository;
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @Override
     public void run(String... args) throws Exception {
-        // 1. Seed SUPERADMIN
-        if (!adminRepository.existsById("SUPERADMIN01")) {
-            AdminFaculty superAdmin = new AdminFaculty();
-            superAdmin.setId("SUPERADMIN01");
-            superAdmin.setName("Super Admin");
-            superAdmin.setEmail("superadmin@gmail.com");
-            superAdmin.setPassword("superadmin");
-            superAdmin.setRole("SUPERADMIN");
-            adminRepository.save(superAdmin);
-            System.out.println("Seeded Super Admin: superadmin@gmail.com / superadmin");
+        // Seed semesters (1 to 2) if empty
+        if (semesterRepository.count() == 0) {
+            semesterRepository.save(new Semester(1, "Semester 1"));
+            semesterRepository.save(new Semester(2, "Semester 2"));
+            System.out.println("Seeded Semesters 1 to 2");
+        } else {
+            // Prune semesters higher than 2
+            semesterRepository.findAll().forEach(s -> {
+                if (s.getSemNumber() > 2) {
+                    semesterRepository.delete(s);
+                }
+            });
         }
 
-        // 2. Seed default ADMIN
-        if (!adminRepository.existsById("ADMIN01")) {
-            AdminFaculty admin = new AdminFaculty();
-            admin.setId("ADMIN01");
-            admin.setName("System Admin");
-            admin.setEmail("admin@gmail.com");
-            admin.setPassword("admin");
-            admin.setRole("ADMIN");
-            adminRepository.save(admin);
-            System.out.println("Seeded Admin: admin@gmail.com / admin");
+        // Fix database schema for subject_allocation table if old section_name column exists with NOT NULL constraint
+        try {
+            jdbcTemplate.execute("ALTER TABLE subject_allocation MODIFY section_name VARCHAR(255) NULL");
+        } catch (Exception e) {
+            // Ignore if column doesn't exist
+        }
+        try {
+            jdbcTemplate.execute("ALTER TABLE subject_allocation DROP COLUMN section_name");
+        } catch (Exception e) {
+            // Ignore if column already dropped
         }
 
-        // 3. Seed Departments
-        if (departmentRepository.count() == 0) {
-            departmentRepository.save(new Department("CSE", "Computer Science & Engineering"));
-            departmentRepository.save(new Department("ECE", "Electronics & Communication Engineering"));
-            departmentRepository.save(new Department("EEE", "Electrical & Electronics Engineering"));
-            departmentRepository.save(new Department("ME", "Mechanical Engineering"));
-            departmentRepository.save(new Department("CE", "Civil Engineering"));
-            System.out.println("Seeded default Departments");
+        // Programmatic one-time cleanup of orphaned database records referencing deleted faculty IDs
+        try {
+            jdbcTemplate.execute("DELETE FROM faculty_subject_preference WHERE faculty_id NOT IN (SELECT id FROM admin_faculty)");
+            jdbcTemplate.execute("DELETE FROM subject_allocation WHERE faculty_id NOT IN (SELECT id FROM admin_faculty)");
+            jdbcTemplate.execute("DELETE FROM section_allocation WHERE faculty_id NOT IN (SELECT id FROM admin_faculty)");
+            jdbcTemplate.execute("DELETE FROM allocation_history WHERE faculty_id NOT IN (SELECT id FROM admin_faculty)");
+            System.out.println("--- Cleaned up orphaned preferences and allocations referencing deleted/unknown faculty IDs ---");
+        } catch (Exception e) {
+            System.err.println("Error cleaning up orphaned allocations: " + e.getMessage());
         }
 
-        // 4. Seed Academic Years
-        if (academicYearRepository.count() == 0) {
-            academicYearRepository.save(new AcademicYear(1, "I Year"));
-            academicYearRepository.save(new AcademicYear(2, "II Year"));
-            academicYearRepository.save(new AcademicYear(3, "III Year"));
-            academicYearRepository.save(new AcademicYear(4, "IV Year"));
-            System.out.println("Seeded default Academic Years");
+        // Deduplication logic commented out to prevent startup deletion of faculty data
+        /*
+        try {
+            List<AdminFaculty> allUsers = adminRepository.findAll();
+            java.util.Map<String, List<AdminFaculty>> usersByEmail = new java.util.HashMap<>();
+            for (AdminFaculty u : allUsers) {
+                if (u.getEmail() != null) {
+                    String emailKey = u.getEmail().toLowerCase().trim();
+                    usersByEmail.computeIfAbsent(emailKey, k -> new java.util.ArrayList<>()).add(u);
+                }
+            }
+
+            for (java.util.Map.Entry<String, List<AdminFaculty>> entry : usersByEmail.entrySet()) {
+                List<AdminFaculty> list = entry.getValue();
+                if (list.size() > 1) {
+                    System.out.println("Found duplicate email: " + entry.getKey() + " with " + list.size() + " accounts.");
+                    AdminFaculty keepUser = null;
+                    // 1. Try to find a non-numeric ID first
+                    for (AdminFaculty u : list) {
+                        if (u.getId() != null && !u.getId().matches("\\d+")) {
+                            keepUser = u;
+                            break;
+                        }
+                    }
+                    // 2. Fallback to roles
+                    if (keepUser == null) {
+                        for (AdminFaculty u : list) {
+                            if ("SUPERADMIN".equalsIgnoreCase(u.getRole())) {
+                                keepUser = u;
+                                break;
+                            }
+                        }
+                    }
+                    if (keepUser == null) {
+                        for (AdminFaculty u : list) {
+                            if ("ADMIN".equalsIgnoreCase(u.getRole())) {
+                                keepUser = u;
+                                break;
+                            }
+                        }
+                    }
+                    if (keepUser == null) {
+                        keepUser = list.get(0);
+                    }
+
+                    String keepId = keepUser.getId();
+                    System.out.println("Keeping user ID: " + keepId + " for email: " + keepUser.getEmail());
+
+                    for (AdminFaculty u : list) {
+                        if (!u.getId().equals(keepId)) {
+                            String dupId = u.getId();
+                            System.out.println("Merging and deleting duplicate user ID: " + dupId);
+                            
+                            // Re-link references in other tables
+                            jdbcTemplate.update("UPDATE faculty_subject_preference SET faculty_id = ? WHERE faculty_id = ?", keepId, dupId);
+                            jdbcTemplate.update("UPDATE subject_allocation SET faculty_id = ? WHERE faculty_id = ?", keepId, dupId);
+                            jdbcTemplate.update("UPDATE section_allocation SET faculty_id = ? WHERE faculty_id = ?", keepId, dupId);
+                            jdbcTemplate.update("UPDATE allocation_history SET faculty_id = ? WHERE faculty_id = ?", keepId, dupId);
+                            
+                            // Delete duplicate
+                            adminRepository.delete(u);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error during database deduplication: " + e.getMessage());
+            e.printStackTrace();
+        }
+        */
+
+        // Reset all faculty passwords to faculty@mits on startup
+        try {
+            jdbcTemplate.update("UPDATE admin_faculty SET Password = ? WHERE Role = ?", "faculty@mits", "faculty");
+            System.out.println("--- Reset all faculty passwords to faculty@mits ---");
+        } catch (Exception e) {
+            System.err.println("Error resetting faculty passwords: " + e.getMessage());
         }
 
-        // 5. Seed Sections
-        if (sectionRepository.count() == 0) {
-            // Let's seed default sections for CSE department
-            sectionRepository.save(new Section("CSE", 1, "A"));
-            sectionRepository.save(new Section("CSE", 1, "B"));
-            sectionRepository.save(new Section("CSE", 2, "A"));
-            sectionRepository.save(new Section("CSE", 2, "B"));
-            sectionRepository.save(new Section("CSE", 2, "C"));
-            sectionRepository.save(new Section("CSE", 3, "A"));
-            sectionRepository.save(new Section("CSE", 3, "B"));
-            sectionRepository.save(new Section("CSE", 3, "C"));
-            sectionRepository.save(new Section("CSE", 3, "D"));
-            sectionRepository.save(new Section("CSE", 4, "A"));
-            sectionRepository.save(new Section("CSE", 4, "B"));
-
-            // Seed ECE
-            sectionRepository.save(new Section("ECE", 1, "A"));
-            sectionRepository.save(new Section("ECE", 2, "A"));
-            sectionRepository.save(new Section("ECE", 2, "B"));
-            sectionRepository.save(new Section("ECE", 3, "A"));
-            sectionRepository.save(new Section("ECE", 4, "A"));
-            System.out.println("Seeded default Sections");
+        // Print registered users to console
+        System.out.println("--- Cleaned Database Users ---");
+        for (AdminFaculty u : adminRepository.findAll()) {
+            System.out.println("User -> ID: " + u.getId() + " | Email: " + u.getEmail() + " | Name: " + u.getName() + " | Role: " + u.getRole() + " | Password: " + u.getPassword());
         }
     }
 }

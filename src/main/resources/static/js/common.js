@@ -144,8 +144,8 @@ async function apiRequest(url, options = {}) {
   try {
     const response = await fetch(url, options);
     
-    // Handle unauthorized status
-    if (response.status === 401) {
+    // Handle unauthorized status (except for login requests)
+    if (response.status === 401 && !url.includes('/login')) {
       showToast('Session Expired', 'Please login again', 'error');
       sessionStorage.removeItem('currentUser');
       setTimeout(() => {

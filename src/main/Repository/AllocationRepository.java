@@ -10,5 +10,4 @@ public interface AllocationRepository extends JpaRepository<SubjectAllocation, L
     List<SubjectAllocation> findByFacultyId(String facultyId);
     SubjectAllocation findBySubjectIdAndFacultyId(String subjectId, String facultyId);
     List<SubjectAllocation> findBySubjectId(String subjectId);
-    List<SubjectAllocation> findByFacultyIdAndFinalized(String facultyId, boolean finalized);
 }

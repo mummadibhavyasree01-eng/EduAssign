@@ -4,6 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 @Entity
 public class AdminFaculty {
 	@Id
@@ -11,9 +13,10 @@ public class AdminFaculty {
 	private String id;
 @Column(name="Name",nullable=false)
 private String name;
-@Column(name="EmailId",nullable=false)
+@Column(name="EmailId",nullable=false,unique=true)
 private String email;
 @Column(name="Password",nullable=false)
+@JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
 private String password;
 @Column(name="Role",nullable=false)
 private String role;

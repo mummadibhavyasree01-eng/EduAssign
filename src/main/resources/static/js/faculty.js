@@ -11,9 +11,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('nav-user-name').innerText = currentUser.name;
   document.getElementById('nav-user-role').innerText = isFaculty ? `Role: Faculty (${currentUser.id})` : `Role: Admin (Preview)`;
 
-  // Show "Back to Admin" button if logged-in user is actually an Admin
+  // Show "Back to Admin" button and top-left arrow if logged-in user is an Admin
+  const brandHeader = document.getElementById('navbar-brand-header');
+  const brandBackArrow = document.getElementById('brand-back-arrow');
+  const brandCapIcon = document.getElementById('brand-cap-icon');
+
   if (!isFaculty) {
     document.getElementById('back-to-admin').style.display = 'inline-flex';
+    if (brandBackArrow) brandBackArrow.style.display = 'inline-block';
+    if (brandCapIcon) brandCapIcon.style.display = 'none';
+    
+    if (brandHeader) {
+      brandHeader.addEventListener('click', () => {
+        window.location.href = 'admin.html';
+      });
+    }
   }
 
   // Populate profile fields
@@ -116,7 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateCountdown(deadlineTime);
         countdownInterval = setInterval(() => {
           updateCountdown(deadlineTime);
-        }, 1000 * 60); // Update every minute
+        }, 1000); // Update every second
       }
 
     } catch (error) {
@@ -139,8 +151,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
 
-    timer.innerHTML = `<i class="far fa-clock"></i> Remaining: ${days}d ${hours}h ${mins}m`;
+    timer.innerHTML = `<i class="far fa-clock"></i> Remaining: ${days}d ${hours}h ${mins}m ${secs}s`;
   }
 
   function disableSelectionForm() {
@@ -164,14 +177,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     listContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 30px;"><i class="fas fa-spinner fa-spin"></i> Loading subjects checklist...</div>';
 
     try {
-      // Fetch subjects and current selected preferences in parallel
-      const [allSubjects, preferences] = await Promise.all([
+      // Fetch subjects, current selected preferences, and active selection window in parallel
+      const [allSubjects, preferences, selectionWindow] = await Promise.all([
         apiRequest('/subject/viewAll'),
-        apiRequest(`/faculty/preferences/${currentUser.id}`)
+        apiRequest(`/faculty/preferences/${currentUser.id}`),
+        apiRequest('/adminfaculty/deadline')
       ]);
 
       subjects = Array.isArray(allSubjects) ? allSubjects : [];
       facultyPreferences = Array.isArray(preferences) ? preferences : [];
+
+      // Filter subjects according to active selection window filters
+      if (selectionWindow && selectionWindow.active) {
+        if (selectionWindow.sem) {
+          subjects = subjects.filter(s => Number(s.sem) === Number(selectionWindow.sem));
+        }
+        if (selectionWindow.department) {
+          subjects = subjects.filter(s => s.dep && s.dep.toUpperCase() === selectionWindow.department.toUpperCase());
+        }
+        if (selectionWindow.academicYear) {
+          subjects = subjects.filter(s => s.academicYear && s.academicYear.toLowerCase() === selectionWindow.academicYear.toLowerCase());
+        }
+      }
 
       renderSubjectPreferencesList(subjects);
       
@@ -192,40 +219,80 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Set of currently preferred subject IDs for easy lookup
     const preferredIds = new Set(facultyPreferences.map(p => p.subjectId));
 
+    // Group list by Year, then by Sem
+    const grouped = {};
     list.forEach(sub => {
-      const isChecked = preferredIds.has(sub.id);
-      
-      const item = document.createElement('div');
-      item.className = `subject-item ${isChecked ? 'selected' : ''}`;
-      
-      item.innerHTML = `
-        <input type="checkbox" id="chk-${sub.id}" value="${sub.id}" ${isChecked ? 'checked' : ''}>
-        <div class="subject-details">
-          <span>${sub.name} <code style="color: var(--text-muted); font-size: 0.82rem; font-weight: normal; margin-left: 6px;">${sub.id}</code></span>
-          <small>Year ${sub.year} Sem ${sub.sem} • Dept: ${sub.dep} • Regulation: ${sub.regulation}</small>
-        </div>
-      `;
+      const y = sub.year;
+      const s = sub.sem;
+      if (!grouped[y]) grouped[y] = {};
+      if (!grouped[y][s]) grouped[y][s] = [];
+      grouped[y][s].push(sub);
+    });
 
-      // Handle item checkbox change visual styling
-      const checkbox = item.querySelector('input[type="checkbox"]');
-      
-      checkbox.addEventListener('change', () => {
-        if (checkbox.checked) {
-          item.classList.add('selected');
-        } else {
-          item.classList.remove('selected');
-        }
+    // Sort years and semesters
+    const years = Object.keys(grouped).sort((a,b) => Number(a) - Number(b));
+
+    // Simple label generator
+    const getYearLabel = (yrNo) => {
+      const roman = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI' };
+      return roman[yrNo] ? `${roman[yrNo]} Year` : `Year ${yrNo}`;
+    };
+
+    years.forEach(y => {
+      const sems = Object.keys(grouped[y]).sort((a,b) => Number(a) - Number(b));
+      sems.forEach(s => {
+        // Create a header for the group
+        const groupHeader = document.createElement('div');
+        groupHeader.className = 'subject-group-header';
+        groupHeader.style.padding = '12px 16px';
+        groupHeader.style.marginTop = '16px';
+        groupHeader.style.marginBottom = '8px';
+        groupHeader.style.background = 'rgba(99, 102, 241, 0.06)';
+        groupHeader.style.borderLeft = '4px solid var(--primary)';
+        groupHeader.style.borderRadius = '4px';
+        groupHeader.style.fontSize = '0.9rem';
+        groupHeader.style.fontWeight = 'bold';
+        groupHeader.style.color = 'var(--secondary)';
+        groupHeader.innerHTML = `<i class="fas fa-bookmark" style="margin-right: 8px;"></i> ${getYearLabel(y)} - Semester ${s}`;
+        listContainer.appendChild(groupHeader);
+
+        // Render subjects in this group
+        grouped[y][s].forEach(sub => {
+          const isChecked = preferredIds.has(sub.id);
+          
+          const item = document.createElement('div');
+          item.className = `subject-item ${isChecked ? 'selected' : ''}`;
+          
+          item.innerHTML = `
+            <input type="checkbox" id="chk-${sub.id}" value="${sub.id}" ${isChecked ? 'checked' : ''}>
+            <div class="subject-details">
+              <span>${sub.name} <code style="color: var(--text-muted); font-size: 0.82rem; font-weight: normal; margin-left: 6px;">${sub.id}</code></span>
+              <small>Year ${sub.year} Sem ${sub.sem} • Dept: ${sub.dep} • Regulation: ${sub.regulation}</small>
+            </div>
+          `;
+
+          // Handle item checkbox change visual styling
+          const checkbox = item.querySelector('input[type="checkbox"]');
+          
+          checkbox.addEventListener('change', () => {
+            if (checkbox.checked) {
+              item.classList.add('selected');
+            } else {
+              item.classList.remove('selected');
+            }
+          });
+
+          // Clicking the item container also checks/unchecks the box (except when selecting text)
+          item.addEventListener('click', (e) => {
+            if (e.target !== checkbox && !e.target.closest('label') && isSelectionPeriodActive) {
+              checkbox.checked = !checkbox.checked;
+              checkbox.dispatchEvent(new Event('change'));
+            }
+          });
+
+          listContainer.appendChild(item);
+        });
       });
-
-      // Clicking the item container also checks/unchecks the box (except when selecting text)
-      item.addEventListener('click', (e) => {
-        if (e.target !== checkbox && !e.target.closest('label') && isSelectionPeriodActive) {
-          checkbox.checked = !checkbox.checked;
-          checkbox.dispatchEvent(new Event('change'));
-        }
-      });
-
-      listContainer.appendChild(item);
     });
   }
 
@@ -289,9 +356,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       ]);
 
       const subMap = {};
-      allSubjects.forEach(s => subMap[s.id] = s);
+      if (Array.isArray(allSubjects)) {
+        allSubjects.forEach(s => subMap[s.id] = s);
+      }
 
-      if (allocations.length === 0) {
+      let subAllocList = [];
+      let secAllocList = [];
+
+      if (allocations) {
+        if (Array.isArray(allocations)) {
+          secAllocList = allocations;
+        } else {
+          subAllocList = Array.isArray(allocations.subjectAllocations) ? allocations.subjectAllocations : [];
+          secAllocList = Array.isArray(allocations.sectionAllocations) ? allocations.sectionAllocations : [];
+        }
+      }
+
+      if (subAllocList.length === 0 && secAllocList.length === 0) {
         container.innerHTML = `
           <div class="no-allocations">
             <i class="fas fa-calendar-alt"></i>
@@ -302,19 +383,38 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       container.innerHTML = '';
-      allocations.forEach(alloc => {
-        const sub = subMap[alloc.subjectId] || { name: 'Unknown Subject', year: '?', dep: '?' };
-        
+
+      // First render Section Allocations (with specific Section names)
+      secAllocList.forEach(alloc => {
+        const sub = subMap[alloc.subjectId] || { name: 'Subject: ' + alloc.subjectId, year: '?', dep: '?' };
         const item = document.createElement('div');
         item.className = 'allocation-item';
         item.innerHTML = `
           <div class="alloc-details">
             <h5>${sub.name}</h5>
-            <p>Code: ${alloc.subjectId} • Year ${sub.year} (${sub.dep})</p>
+            <p>Code: ${alloc.subjectId} ${sub.year ? '• Year ' + sub.year + ' (' + sub.dep + ')' : ''}</p>
           </div>
           <span class="alloc-badge">Section ${alloc.sectionName}</span>
         `;
         container.appendChild(item);
+      });
+
+      // Next render Subject Allocations for subjects not yet assigned a section
+      const secSubjectIds = new Set(secAllocList.map(a => a.subjectId));
+      subAllocList.forEach(alloc => {
+        if (!secSubjectIds.has(alloc.subjectId)) {
+          const sub = subMap[alloc.subjectId] || { name: 'Subject: ' + alloc.subjectId, year: '?', dep: '?' };
+          const item = document.createElement('div');
+          item.className = 'allocation-item';
+          item.innerHTML = `
+            <div class="alloc-details">
+              <h5>${sub.name}</h5>
+              <p>Code: ${alloc.subjectId} ${sub.year ? '• Year ' + sub.year + ' (' + sub.dep + ')' : ''}</p>
+            </div>
+            <span class="alloc-badge" style="background: rgba(99,102,241,0.15); color: var(--primary);">Allocated Subject</span>
+          `;
+          container.appendChild(item);
+        }
       });
 
     } catch (error) {

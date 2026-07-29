@@ -19,9 +19,9 @@
         <span>EduAssign Admin</span>
       </div>
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" data-target="faculty-tab">
-          <i class="fas fa-users"></i>
-          <span>Faculty Directory</span>
+        <a href="#" class="nav-item active" data-target="selections-tab">
+          <i class="fas fa-list-check"></i>
+          <span>Faculty Selections</span>
         </a>
         <a href="#" class="nav-item" data-target="subject-tab">
           <i class="fas fa-book-open"></i>
@@ -38,6 +38,10 @@
         <a href="#" class="nav-item" data-target="allocation-tab">
           <i class="fas fa-diagram-project"></i>
           <span>Subject Allocation</span>
+        </a>
+        <a href="#" class="nav-item" data-target="section-allocation-tab">
+          <i class="fas fa-border-all"></i>
+          <span>Section Allocation</span>
         </a>
         <a href="#" class="nav-item" data-target="profile-tab">
           <i class="fas fa-user-gear"></i>
@@ -72,59 +76,72 @@
         </div>
       </header>
 
-      <!-- FACULTY CRUD TAB -->
-      <section id="faculty-tab" class="tab-content active">
+      <!-- FACULTY SELECTIONS TAB -->
+      <section id="selections-tab" class="tab-content active">
         <div class="tab-grid">
-          <div class="glass-panel section-container col-span-3">
+          <!-- Submitted Preferences -->
+          <div class="glass-panel section-container col-span-2">
             <div class="section-actions">
               <div>
-                <h3>Faculty List</h3>
-                <p>Add, update, and manage faculty member accounts</p>
-              </div>
-              <div class="action-buttons">
-                <button class="btn btn-primary" onclick="openFacultyModal()"><i class="fas fa-plus"></i> Add Faculty</button>
+                <h3>Faculty Subject Preferences</h3>
+                <p>Track choices made by faculty members for subject allocation</p>
               </div>
             </div>
             
-            <div class="search-bar-wrapper">
-              <i class="fas fa-search search-icon"></i>
-              <input type="text" id="faculty-search" class="form-control" placeholder="Search faculty by name, ID or email...">
+            <div class="filter-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+              <div>
+                <select id="pref-dept-filter" class="form-control">
+                  <option value="" disabled selected>Select Department</option>
+                </select>
+              </div>
+              <div>
+                <select id="pref-year-filter" class="form-control">
+                  <option value="" disabled selected>Select Academic Year</option>
+                </select>
+              </div>
+              <div>
+                <select id="pref-sem-filter" class="form-control">
+                  <option value="" disabled selected>Select Semester</option>
+                </select>
+              </div>
             </div>
 
             <div class="table-responsive">
               <table class="table">
                 <thead>
                   <tr>
-                    <th>Faculty ID</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Password</th>
-                    <th style="text-align: right;">Actions</th>
+                    <th>Faculty</th>
+                    <th>Subject Code</th>
+                    <th>Subject Name</th>
+                    <th>Year / Dept</th>
+                    <th>Semester</th>
                   </tr>
                 </thead>
-                <tbody id="faculty-table-body">
+                <tbody id="preferences-table-body">
                   <tr><td colspan="5" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
 
-          <!-- Faculty Excel Upload -->
+          <!-- Non-Submitted Faculty -->
           <div class="glass-panel section-container">
-            <h3>Import Faculty</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Upload Excel file (.xlsx) with columns: <strong>Id, Name, Email, Password</strong> (Row 1 is headers).</p>
+            <h3>Pending Submissions</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Faculty members who have not yet selected any preferences.</p>
             
-            <form id="faculty-upload-form">
-              <div class="file-dropzone" id="faculty-dropzone">
-                <i class="fas fa-file-excel file-icon"></i>
-                <p>Drag & drop Faculty Excel sheet or click to browse</p>
-                <input type="file" id="faculty-excel-file" accept=".xlsx" style="display: none;">
-                <span class="file-name-display" id="faculty-file-name">No file chosen</span>
-              </div>
-              <button type="submit" class="btn btn-secondary btn-block" style="margin-top: 15px;">
-                <i class="fas fa-cloud-upload-alt"></i> Upload Faculty
-              </button>
-            </form>
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Faculty ID</th>
+                    <th>Name</th>
+                  </tr>
+                </thead>
+                <tbody id="pending-table-body">
+                  <tr><td colspan="2" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -143,9 +160,27 @@
               </div>
             </div>
 
-            <div class="search-bar-wrapper">
+            <div class="search-bar-wrapper" style="margin-bottom: 15px;">
               <i class="fas fa-search search-icon"></i>
               <input type="text" id="subject-search" class="form-control" placeholder="Search subjects by code, name, department...">
+            </div>
+
+            <div class="filter-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+              <div>
+                <select id="sub-dept-filter" class="form-control">
+                  <option value="" disabled selected>Select Department</option>
+                </select>
+              </div>
+              <div>
+                <select id="sub-year-filter" class="form-control">
+                  <option value="" disabled selected>Select Academic Year</option>
+                </select>
+              </div>
+              <div>
+                <select id="sub-sem-filter" class="form-control">
+                  <option value="" disabled selected>Select Semester</option>
+                </select>
+              </div>
             </div>
 
             <div class="table-responsive">
@@ -158,6 +193,7 @@
                     <th>Semester</th>
                     <th>Department</th>
                     <th>Regulation</th>
+                    <th>Academic Year</th>
                     <th style="text-align: right;">Actions</th>
                   </tr>
                 </thead>
@@ -249,8 +285,10 @@
             </div>
           </div>
 
+
+
           <!-- Sections CRUD -->
-          <div class="glass-panel section-container col-span-3">
+          <div class="glass-panel section-container col-span-2">
             <div class="section-actions">
               <div>
                 <h3>Sections</h3>
@@ -309,6 +347,24 @@
                 <label for="deadline-days">Deadline Window (in Days)</label>
                 <input type="number" id="deadline-days" class="form-control" min="1" max="30" value="3" required>
               </div>
+              <div class="form-group" style="max-width: 300px;">
+                <label for="deadline-sem">Active Semester</label>
+                <select id="deadline-sem" class="form-control" required>
+                  <option value="" disabled selected>Select Semester</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="max-width: 300px;">
+                <label for="deadline-year">Academic Year</label>
+                <input type="text" id="deadline-year" class="form-control" placeholder="e.g. 2026-27" required>
+              </div>
+
+              <div class="form-group" style="max-width: 300px;">
+                <label for="deadline-dept">Department</label>
+                <select id="deadline-dept" class="form-control" required>
+                  <option value="" disabled selected>Select Dept</option>
+                </select>
+              </div>
 
               <button type="submit" class="btn btn-primary">
                 <i class="fas fa-paper-plane"></i> Publish Selection Window
@@ -326,6 +382,15 @@
             </div>
           </div>
         </div>
+
+        <!-- Subject Preview Panel -->
+        <div class="glass-panel section-container" style="margin-top: 20px;">
+          <h3>Subject Preview / Review</h3>
+          <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Review matching subjects that will be opened for faculty selection.</p>
+          <div id="deadline-subjects-preview" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="color: var(--text-muted); font-style: italic;">Select Department, Active Semester, and enter Academic Year above to preview subjects list.</p>
+          </div>
+        </div>
       </section>
 
       <!-- ALLOCATION TAB -->
@@ -338,69 +403,153 @@
           <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 6px;">Still there is time for faculty to select subjects. You cannot perform allocations until the selection deadline is reached.</p>
         </div>
 
-        <div class="allocation-grid" id="allocation-workspace">
-          <!-- Allocation Form -->
-          <div class="glass-panel section-container" style="height: fit-content;">
-            <h3>New Allocation</h3>
-            <p style="margin-bottom: 20px; font-size: 0.9rem;">Allocate a subject and section to a faculty member.</p>
+        <!-- Finalization Header Banner -->
+        <div class="glass-panel section-container" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; padding: 20px; flex-wrap: wrap; gap: 16px;">
+          <div>
+            <h3 style="margin-bottom: 4px;">Subject Allocation Workspace & Controls</h3>
+            <p style="font-size: 0.88rem; color: var(--text-muted);">Automatically generate draft allocations based on preferences, review/modify manually, then finalize.</p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <button class="btn btn-primary" id="auto-allocate-btn" onclick="autoAllocateSubjects()">
+              <i class="fas fa-bolt"></i> Auto-Allocate Subjects
+            </button>
+            <span class="status-badge" id="finalize-status-badge" style="padding: 8px 16px; font-size: 0.85rem;">Draft Mode</span>
+            <button class="btn btn-secondary" id="finalize-allocations-btn" onclick="finalizeAllAllocations()">
+              <i class="fas fa-check-double"></i> Finalize Allocations
+            </button>
+          </div>
+        </div>
+
+        <div class="allocation-grid" id="allocation-workspace" style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+          
+          <!-- Column 1: Subject Allocation -->
+          <div class="glass-panel section-container" style="height: fit-content; display: flex; flex-direction: column; gap: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h3>Subject Allocation</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">Assign subjects to faculty members (Auto or Manual).</p>
+              </div>
+            </div>
             
-            <form id="allocate-form">
+            <form id="allocate-subject-form">
               <div class="form-group">
-                <label for="alloc-faculty-select">1. Select Faculty</label>
+                <label for="alloc-faculty-select">Select Faculty</label>
                 <select id="alloc-faculty-select" class="form-control" required>
                   <option value="" disabled selected>Choose Faculty...</option>
                 </select>
               </div>
 
-              <!-- Faculty Preferences list (informational) -->
+              <!-- Faculty Preferences list -->
               <div class="preferences-preview" style="margin-bottom: 20px;">
                 <h5 style="font-size: 0.82rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">Faculty Subject Preferences:</h5>
-                <ul id="alloc-faculty-pref-list" style="padding-left: 20px; font-size: 0.88rem; color: var(--secondary)">
+                <ul id="alloc-faculty-pref-list" style="padding-left: 20px; font-size: 0.88rem; color: var(--secondary); max-height: 150px; overflow-y: auto;">
                   <li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">Select a faculty to see their choices</li>
                 </ul>
               </div>
 
               <div class="form-group">
-                <label for="alloc-subject-select">2. Select Subject</label>
+                <label for="alloc-subject-select">Select Subject</label>
                 <select id="alloc-subject-select" class="form-control" required>
                   <option value="" disabled selected>Choose Subject...</option>
                 </select>
               </div>
 
+              <button type="submit" class="btn btn-primary btn-block">
+                <i class="fas fa-link"></i> Allocate Subject
+              </button>
+            </form>
+
+            <div style="margin-top: 10px;">
+              <h4>Subject Allocations List</h4>
+              <div class="table-responsive" style="max-height: 350px; overflow-y: auto; margin-top: 10px;">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Faculty</th>
+                      <th>Subject</th>
+                      <th style="text-align: right;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="subject-allocations-table-body">
+                    <tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No subject allocations.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION ALLOCATION TAB -->
+      <section id="section-allocation-tab" class="tab-content">
+        <!-- Before deadline warning -->
+        <div class="glass-panel info-banner" id="section-allocation-warning" style="display: none; border-color: var(--warning); background: rgba(245,158,11,0.06); padding: 20px; margin-bottom: 20px;">
+          <h4 style="color: var(--warning); display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-exclamation-triangle"></i> Subject Selection Period Active
+          </h4>
+          <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 6px;">Still there is time for faculty to select subjects. You cannot perform section allocations until the selection deadline is reached.</p>
+        </div>
+
+        <!-- Section Allocation Header Banner -->
+        <div class="glass-panel section-container" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; padding: 20px; flex-wrap: wrap; gap: 16px;">
+          <div>
+            <h3 style="margin-bottom: 4px;">Section Allocation Workspace</h3>
+            <p style="font-size: 0.88rem; color: var(--text-muted);">Assign sections to the subject-allocated faculty.</p>
+          </div>
+        </div>
+
+        <div class="allocation-grid" id="section-allocation-workspace" style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+          <!-- Section Allocation Container -->
+          <div class="glass-panel section-container" style="height: fit-content; display: flex; flex-direction: column; gap: 20px;">
+            <div>
+              <h3>Section Allocation</h3>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Assign sections to the subject-allocated faculty.</p>
+            </div>
+            
+            <form id="allocate-section-form">
               <div class="form-group">
-                <label for="alloc-section-select">3. Select Section</label>
+                <label for="alloc-sec-subject-select">Select Allocated Subject</label>
+                <select id="alloc-sec-subject-select" class="form-control" required>
+                  <option value="" disabled selected>Choose Subject...</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="alloc-sec-faculty-select">Select Allocated Faculty</label>
+                <select id="alloc-sec-faculty-select" class="form-control" required>
+                  <option value="" disabled selected>Choose Faculty...</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="alloc-section-select">Select Section</label>
                 <select id="alloc-section-select" class="form-control" required>
                   <option value="" disabled selected>Choose Section...</option>
                 </select>
               </div>
 
-              <button type="submit" class="btn btn-primary btn-block" id="alloc-submit-btn">
-                <i class="fas fa-link"></i> Allocate Subject
+              <button type="submit" class="btn btn-secondary btn-block">
+                <i class="fas fa-border-all"></i> Allocate Section
               </button>
             </form>
-          </div>
 
-          <!-- Allocation Listing -->
-          <div class="glass-panel section-container col-span-2">
-            <h3>Current Allocations</h3>
-            <p style="margin-bottom: 20px;">Allocated classes per subject</p>
-
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Faculty</th>
-                    <th>Subject Code</th>
-                    <th>Subject Name</th>
-                    <th>Year / Dept</th>
-                    <th>Section</th>
-                    <th style="text-align: right;">Action</th>
-                  </tr>
-                </thead>
-                <tbody id="allocation-table-body">
-                  <tr><td colspan="6" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
-                </tbody>
-              </table>
+            <div style="margin-top: 10px;">
+              <h4>Section Allocations List</h4>
+              <div class="table-responsive" style="max-height: 350px; overflow-y: auto; margin-top: 10px;">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Faculty</th>
+                      <th>Subject</th>
+                      <th>Section</th>
+                      <th style="text-align: right;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="section-allocations-table-body">
+                    <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No section allocations.</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -438,36 +587,33 @@
 
   <!-- MODALS FOR CRUD OPERATIONS -->
   
-  <!-- Faculty Modal -->
-  <div class="modal-overlay" id="faculty-modal">
+  <!-- Section Edit Modal -->
+  <div class="modal-overlay" id="section-modal">
     <div class="modal-container glass-panel">
       <div class="modal-header">
-        <h3 class="modal-title" id="faculty-modal-title">Add Faculty</h3>
-        <button class="modal-close" onclick="closeFacultyModal()"><i class="fas fa-times"></i></button>
+        <h3 class="modal-title" id="section-modal-title">Edit Section</h3>
+        <button class="modal-close" onclick="closeSectionModal()"><i class="fas fa-times"></i></button>
       </div>
-      <form id="faculty-form">
-        <input type="hidden" id="faculty-modal-mode" value="add"> <!-- add or edit -->
+      <form id="edit-section-form">
+        <input type="hidden" id="edit-section-id">
         <div class="modal-body">
           <div class="input-wrapper">
-            <input type="text" id="fac-id" placeholder=" " required>
-            <label for="fac-id">Faculty ID</label>
+            <select id="edit-section-dept" class="form-control" required style="padding-top: 14px;">
+              <option value="" disabled selected>Select Dept</option>
+            </select>
           </div>
           <div class="input-wrapper">
-            <input type="text" id="fac-name" placeholder=" " required>
-            <label for="fac-name">Full Name</label>
+            <select id="edit-section-year" class="form-control" required style="padding-top: 14px;">
+              <option value="" disabled selected>Select Year</option>
+            </select>
           </div>
           <div class="input-wrapper">
-            <input type="email" id="fac-email" placeholder=" " required autocomplete="email">
-            <label for="fac-email">Email Address</label>
-          </div>
-          <div class="input-wrapper">
-            <input type="text" id="fac-password" placeholder=" " required autocomplete="new-password">
-            <label for="fac-password">Password</label>
+            <input type="text" id="edit-section-name" class="form-control" placeholder="Sec Name (e.g. A)" required>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-ghost" onclick="closeFacultyModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="faculty-modal-btn">Add Faculty</button>
+          <button type="button" class="btn btn-ghost" onclick="closeSectionModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Update Section</button>
         </div>
       </form>
     </div>
@@ -504,13 +650,15 @@
           <div class="input-wrapper">
             <select id="sub-sem" class="form-control" required style="padding-top: 14px;">
               <option value="" disabled selected>Select Semester</option>
-              <option value="1">Semester 1</option>
-              <option value="2">Semester 2</option>
             </select>
           </div>
-          <div class="input-wrapper">
+
             <input type="text" id="sub-regulation" placeholder=" " required>
             <label for="sub-regulation">Regulation (e.g. R23)</label>
+          </div>
+          <div class="input-wrapper">
+            <input type="text" id="sub-academic-year" placeholder=" " required>
+            <label for="sub-academic-year">Academic Year (e.g. 2026-27)</label>
           </div>
         </div>
         <div class="modal-footer">

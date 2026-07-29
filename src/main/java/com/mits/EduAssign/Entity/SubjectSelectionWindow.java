@@ -19,12 +19,32 @@ public class SubjectSelectionWindow {
     @Column(name="Active", nullable=false)
     private boolean active;
 
+    @Column(name="Sem")
+    private Integer sem;
+
+    @Column(name="AcademicYear")
+    private String academicYear;
+
+    @Column(name="Department")
+    private String department;
+
     public SubjectSelectionWindow() {}
 
-    public SubjectSelectionWindow(String message, LocalDateTime deadline, boolean active) {
+    public SubjectSelectionWindow(String message, LocalDateTime deadline, boolean active, Integer sem, String academicYear, String department) {
         this.message = message;
         this.deadline = deadline;
         this.active = active;
+        this.sem = sem;
+        this.academicYear = academicYear;
+        this.department = department;
+    }
+
+    public Integer getSem() {
+        return sem;
+    }
+
+    public void setSem(Integer sem) {
+        this.sem = sem;
     }
 
     public Integer getId() {
@@ -57,5 +77,21 @@ public class SubjectSelectionWindow {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public String getAcademicYear() {
+        return academicYear;
+    }
+
+    public void setAcademicYear(String academicYear) {
+        this.academicYear = academicYear;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
     }
 }

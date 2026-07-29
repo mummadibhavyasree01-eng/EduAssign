@@ -8,9 +8,11 @@ import org.springframework.web.bind.annotation.*;
 
 import com.mits.EduAssign.Entity.Department;
 import com.mits.EduAssign.Entity.AcademicYear;
+import com.mits.EduAssign.Entity.Semester;
 import com.mits.EduAssign.Entity.Section;
 import com.mits.EduAssign.Repository.DepartmentRepository;
 import com.mits.EduAssign.Repository.AcademicYearRepository;
+import com.mits.EduAssign.Repository.SemesterRepository;
 import com.mits.EduAssign.Repository.SectionRepository;
 
 @RestController
@@ -22,6 +24,9 @@ public class SectionController {
 
     @Autowired
     private AcademicYearRepository academicYearRepository;
+
+    @Autowired
+    private SemesterRepository semesterRepository;
 
     @Autowired
     private SectionRepository sectionRepository;
@@ -85,6 +90,35 @@ public class SectionController {
     }
 
     // ----------------------------------------------------
+    // SEMESTER CRUD
+    // ----------------------------------------------------
+
+    @GetMapping("/semesters")
+    public ResponseEntity<List<Semester>> getAllSemesters() {
+        return ResponseEntity.ok(semesterRepository.findAll());
+    }
+
+    @PostMapping("/semesters")
+    public ResponseEntity<?> addSemester(@RequestBody Semester semester) {
+        if (semester.getSemNumber() == null) {
+            return ResponseEntity.badRequest().body("Semester number is required");
+        }
+        if (semesterRepository.existsById(semester.getSemNumber())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("Semester number already exists");
+        }
+        return ResponseEntity.ok(semesterRepository.save(semester));
+    }
+
+    @DeleteMapping("/semesters/{semNo}")
+    public ResponseEntity<?> deleteSemester(@PathVariable Integer semNo) {
+        if (!semesterRepository.existsById(semNo)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Semester not found");
+        }
+        semesterRepository.deleteById(semNo);
+        return ResponseEntity.ok("Semester deleted successfully");
+    }
+
+    // ----------------------------------------------------
     // SECTION CRUD
     // ----------------------------------------------------
 
@@ -119,6 +153,32 @@ public class SectionController {
         }
         sectionRepository.deleteById(id);
         return ResponseEntity.ok("Section deleted successfully");
+    }
+
+    @PutMapping("/update/{id}")
+    public ResponseEntity<?> updateSection(@PathVariable Long id, @RequestBody Section updatedSection) {
+        Section section = sectionRepository.findById(id).orElse(null);
+        if (section == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Section not found");
+        }
+        
+        if (updatedSection.getDepartmentCode() == null || updatedSection.getYearNumber() == null || 
+            updatedSection.getSectionName() == null || updatedSection.getSectionName().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Department, Year, and Section Name are all required");
+        }
+        
+        Section existing = sectionRepository.findByDepartmentCodeAndYearNumberAndSectionName(
+                updatedSection.getDepartmentCode(), updatedSection.getYearNumber(), updatedSection.getSectionName().trim());
+        
+        if (existing != null && !existing.getId().equals(id)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("Section combination already exists");
+        }
+        
+        section.setDepartmentCode(updatedSection.getDepartmentCode());
+        section.setYearNumber(updatedSection.getYearNumber());
+        section.setSectionName(updatedSection.getSectionName().trim());
+        
+        return ResponseEntity.ok(sectionRepository.save(section));
     }
 
     @GetMapping("/by-dept-year")

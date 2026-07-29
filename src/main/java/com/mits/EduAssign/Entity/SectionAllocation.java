@@ -7,7 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
 @Entity
-public class SubjectAllocation {
+public class SectionAllocation {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -15,16 +15,20 @@ public class SubjectAllocation {
     @Column(name="SubjectId", nullable=false)
     private String subjectId;
 
+    @Column(name="SectionName", nullable=false)
+    private String sectionName;
+
     @Column(name="FacultyId", nullable=false)
     private String facultyId;
 
     @Column(name="Finalized", nullable=false)
     private boolean finalized = false;
 
-    public SubjectAllocation() {}
+    public SectionAllocation() {}
 
-    public SubjectAllocation(String subjectId, String facultyId) {
+    public SectionAllocation(String subjectId, String sectionName, String facultyId) {
         this.subjectId = subjectId;
+        this.sectionName = sectionName;
         this.facultyId = facultyId;
         this.finalized = false;
     }
@@ -43,6 +47,14 @@ public class SubjectAllocation {
 
     public void setSubjectId(String subjectId) {
         this.subjectId = subjectId;
+    }
+
+    public String getSectionName() {
+        return sectionName;
+    }
+
+    public void setSectionName(String sectionName) {
+        this.sectionName = sectionName;
     }
 
     public String getFacultyId() {
