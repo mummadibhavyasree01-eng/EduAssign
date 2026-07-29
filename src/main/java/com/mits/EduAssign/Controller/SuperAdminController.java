@@ -100,9 +100,9 @@ public class SuperAdminController {
 
     @GetMapping("/reports/allocations")
     public ResponseEntity<?> getYearWiseReport(@RequestParam String academicYear) {
-        // Fetch all faculty members (role is "faculty")
+        // Fetch all faculty and admin users (exclude SUPERADMIN role)
         List<AdminFaculty> faculties = adminRepository.findAll().stream()
-                .filter(u -> "faculty".equalsIgnoreCase(u.getRole()))
+                .filter(u -> !"SUPERADMIN".equalsIgnoreCase(u.getRole()))
                 .collect(Collectors.toList());
         faculties.sort(new NaturalOrderComparator());
 

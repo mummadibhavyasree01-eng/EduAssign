@@ -162,7 +162,7 @@ public class SubjectService {
     }
 
     public List<FacultySubjectPreference> getPreferencesByFacultyId(String facultyId) {
-        return preferenceRepository.findByFacultyId(facultyId);
+        return preferenceRepository.findByFacultyIdOrderByIdAsc(facultyId);
     }
 
     // ----------------------------------------------------
@@ -591,5 +591,61 @@ public class SubjectService {
             default:
                 return 0;
         }
+    }
+
+    public List<String> getAcademicYears() {
+        java.util.Set<String> years = new java.util.TreeSet<>();
+        allocationHistoryRepository.findAll().forEach(h -> {
+            if (h.getAcademicYear() != null && !h.getAcademicYear().trim().isEmpty()) {
+                years.add(h.getAcademicYear().trim());
+            }
+        });
+        subjectRepository.findAll().forEach(s -> {
+            if (s.getAcademicYear() != null && !s.getAcademicYear().trim().isEmpty()) {
+                years.add(s.getAcademicYear().trim());
+            }
+        });
+        windowRepository.findAll().forEach(w -> {
+            if (w.getAcademicYear() != null && !w.getAcademicYear().trim().isEmpty()) {
+                years.add(w.getAcademicYear().trim());
+            }
+        });
+        if (years.isEmpty()) {
+            years.add("2026-27");
+        }
+        return new ArrayList<>(years);
+    }
+
+    public List<FacultySubjectPreference> getPreferencesByAcademicYear(String academicYear) {
+        List<FacultySubjectPreference> all = preferenceRepository.findAll();
+        if (all.isEmpty()) return all;
+        
+        List<FacultySubjectPreference> filtered = all.stream()
+            .filter(p -> {
+                Subject sub = subjectRepository.findById(p.getSubjectId()).orElse(null);
+                return sub != null && academicYear.equalsIgnoreCase(sub.getAcademicYear());
+            })
+            .collect(Collectors.toList());
+        filtered.sort(java.util.Comparator.comparing(FacultySubjectPreference::getId));
+        return filtered;
+    }
+
+    public List<AdminFaculty> getFacultyWithNoPreferencesByAcademicYear(String academicYear) {
+        List<AdminFaculty> allFaculty = adminRepository.findAll().stream()
+                .filter(user -> "faculty".equalsIgnoreCase(user.getRole()) || 
+                               ("ADMIN".equalsIgnoreCase(user.getRole()) && !"ADMIN01".equalsIgnoreCase(user.getId())))
+                .collect(Collectors.toList());
+        
+        List<FacultySubjectPreference> prefs = getPreferencesByAcademicYear(academicYear);
+        List<String> facultyWithPrefs = prefs.stream()
+                .map(FacultySubjectPreference::getFacultyId)
+                .distinct()
+                .collect(Collectors.toList());
+                
+        List<AdminFaculty> result = allFaculty.stream()
+                .filter(f -> !facultyWithPrefs.contains(f.getId()))
+                .collect(Collectors.toList());
+        result.sort(new NaturalOrderComparator());
+        return result;
     }
 }

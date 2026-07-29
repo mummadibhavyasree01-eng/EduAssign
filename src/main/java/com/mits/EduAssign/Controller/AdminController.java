@@ -239,8 +239,16 @@ public class AdminController {
 	    }
 
 	    @GetMapping("/no-preferences-faculty")
-	    public ResponseEntity<?> getFacultyWithNoPreferences() {
+	    public ResponseEntity<?> getFacultyWithNoPreferences(@RequestParam(required = false) String academicYear) {
+	        if (academicYear != null && !academicYear.trim().isEmpty()) {
+	            return ResponseEntity.ok(subjectService.getFacultyWithNoPreferencesByAcademicYear(academicYear.trim()));
+	        }
 	        return ResponseEntity.ok(subjectService.getFacultyWithNoPreferences());
+	    }
+
+	    @GetMapping("/academic-years")
+	    public ResponseEntity<List<String>> getAcademicYears() {
+	        return ResponseEntity.ok(subjectService.getAcademicYears());
 	    }
 
 	    @PostMapping("/auto-allocate")

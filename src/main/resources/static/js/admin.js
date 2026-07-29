@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadFacultySelections() {
     const tbody = document.getElementById('preferences-table-body');
     const pendingTbody = document.getElementById('pending-table-body');
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading selections...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading selections...</td></tr>`;
     pendingTbody.innerHTML = `<tr><td colspan="2" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>`;
 
     try {
@@ -144,10 +144,20 @@ document.addEventListener('DOMContentLoaded', () => {
       
       populateFilterDropdowns();
 
+      const academicYearInput = document.getElementById('pref-academic-year-input');
+      const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '2026-27';
+
       const faculty = await apiRequest('/adminfaculty/viewfaculty');
       const subjects = await apiRequest('/subject/viewAll');
-      allPreferences = await apiRequest('/faculty/preferences/all');
-      noPrefFaculty = await apiRequest('/adminfaculty/no-preferences-faculty');
+      
+      let allPreferences, noPrefFaculty;
+      if (academicYearVal) {
+        allPreferences = await apiRequest(`/faculty/preferences/by-academic-year?academicYear=${encodeURIComponent(academicYearVal)}`);
+        noPrefFaculty = await apiRequest(`/adminfaculty/no-preferences-faculty?academicYear=${encodeURIComponent(academicYearVal)}`);
+      } else {
+        allPreferences = await apiRequest('/faculty/preferences/all');
+        noPrefFaculty = await apiRequest('/adminfaculty/no-preferences-faculty');
+      }
 
       const facultyMap = {};
       const facList = Array.isArray(faculty) ? faculty : [];
@@ -168,14 +178,13 @@ document.addEventListener('DOMContentLoaded', () => {
       renderPendingTable();
 
     } catch (error) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--error);">Failed to load preferences</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--error);">Failed to load preferences: ${error.message}</td></tr>`;
       pendingTbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--error);">Failed to load pending list</td></tr>`;
     }
   }
 
   function populateFilterDropdowns() {
     const deptFilter = document.getElementById('pref-dept-filter');
-    const yearFilter = document.getElementById('pref-year-filter');
     const semFilter = document.getElementById('pref-sem-filter');
 
     const subDeptFilter = document.getElementById('sub-dept-filter');
@@ -196,15 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
         opt.value = d.code;
         opt.innerText = `${d.code} - ${d.name}`;
         subDeptFilter.appendChild(opt);
-      });
-    }
-
-    if (yearFilter && yearFilter.options.length <= 1) {
-      academicYears.forEach(y => {
-        const opt = document.createElement('option');
-        opt.value = y.yearNumber;
-        opt.innerText = y.name;
-        yearFilter.appendChild(opt);
       });
     }
     if (subYearFilter && subYearFilter.options.length <= 1) {
@@ -241,12 +241,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!tbody) return;
     tbody.innerHTML = '';
 
+    const academicYearVal = document.getElementById('pref-academic-year-input').value.trim();
     const deptVal = document.getElementById('pref-dept-filter').value;
-    const yearVal = document.getElementById('pref-year-filter').value;
     const semVal = document.getElementById('pref-sem-filter').value;
 
-    if (!deptVal || !yearVal || !semVal) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 15px;">Please select Department, Academic Year, and Semester to view preferences.</td></tr>`;
+    if (!academicYearVal || !deptVal || !semVal) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 15px;">Please enter Academic Year, select Department, and select Semester to view preferences.</td></tr>`;
       return;
     }
 
@@ -258,16 +258,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Filter out orphaned preferences where faculty or subject no longer exists
     filtered = filtered.filter(p => data.facultyMap[p.facultyId] && data.subjectsMap[p.subjectId]);
 
+    // Apply optional filters
     if (deptVal) {
       filtered = filtered.filter(p => {
         const sub = data.subjectsMap[p.subjectId];
         return sub && getSubjectDeptCode(sub) === deptVal.toUpperCase();
-      });
-    }
-    if (yearVal) {
-      filtered = filtered.filter(p => {
-        const sub = data.subjectsMap[p.subjectId];
-        return sub && Number(sub.year) === Number(yearVal);
       });
     }
     if (semVal) {
@@ -277,22 +272,88 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No preferences found matching criteria.</td></tr>`;
+    // Group by faculty
+    const grouped = {};
+    const facultyOrder = [];
+    
+    // Sort all preferences by ID (ascending) to maintain selection order
+    filtered.sort((a, b) => Number(a.id) - Number(b.id));
+
+    filtered.forEach(p => {
+      if (!grouped[p.facultyId]) {
+        grouped[p.facultyId] = [];
+        facultyOrder.push(p.facultyId);
+      }
+      grouped[p.facultyId].push(p);
+    });
+
+    // Sort facultyOrder naturally by faculty ID
+    facultyOrder.sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' }));
+
+    if (facultyOrder.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No preferences found matching criteria.</td></tr>`;
       return;
     }
 
-    filtered.forEach(p => {
-      const fac = data.facultyMap[p.facultyId] || { name: 'Unknown Faculty' };
-      const sub = data.subjectsMap[p.subjectId] || { name: 'Unknown Subject', year: '?', dep: '?', sem: '?' };
+    tbody.innerHTML = '';
+    facultyOrder.forEach(facId => {
+      const fac = data.facultyMap[facId] || { name: 'Unknown Faculty' };
+      const prefsList = grouped[facId];
       
+      const depts = [...new Set(prefsList.map(p => {
+        const sub = data.subjectsMap[p.subjectId];
+        return sub ? getSubjectDeptCode(sub) : '';
+      }).filter(Boolean))].join(', ');
+
       const tr = document.createElement('tr');
+      
+      // Group the faculty's preferences by year
+      const yearGroups = {};
+      prefsList.forEach((p, index) => {
+        const sub = data.subjectsMap[p.subjectId];
+        if (sub) {
+          const yr = sub.year;
+          if (!yearGroups[yr]) {
+            yearGroups[yr] = [];
+          }
+          yearGroups[yr].push({
+            sub,
+            choiceNum: index + 1
+          });
+        }
+      });
+
+      // Get sorted list of years that actually have preferences
+      const selectedYears = Object.keys(yearGroups).map(Number).sort((a, b) => a - b);
+
+      let prefHtml = '<div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">';
+      if (selectedYears.length === 0) {
+        prefHtml += `<span style="color: var(--text-muted); font-style: italic; font-size: 0.88rem;">No preferences selected</span>`;
+      } else {
+        selectedYears.forEach(yr => {
+          const choices = yearGroups[yr];
+          const choicesHtml = choices.map(c => `
+            <div class="preference-badge" style="background: rgba(20, 184, 166, 0.08); border: 1px solid rgba(20, 184, 166, 0.2); border-radius: 4px; padding: 4px 10px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; margin-bottom: 4px;">
+              <span style="font-weight: 700; color: var(--secondary); background: rgba(20, 184, 166, 0.15); border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem;">${c.choiceNum}</span>
+              <span style="color: var(--text-main);">${c.sub.name} <code style="color: var(--text-muted); font-size: 0.78rem;">(${c.sub.id})</code></span>
+            </div>
+          `).join('');
+
+          prefHtml += `
+            <div style="display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.03); padding-bottom: 6px; margin-bottom: 2px;">
+              <span style="font-weight: 600; min-width: 60px; color: var(--secondary); font-size: 0.85rem; padding-top: 4px;">Year ${yr}:</span>
+              <div style="display: flex; flex-wrap: wrap; flex-grow: 1; align-items: center;">${choicesHtml}</div>
+            </div>
+          `;
+        });
+      }
+      prefHtml += '</div>';
+
       tr.innerHTML = `
-        <td><strong>${p.facultyId}</strong><br><span style="font-size: 0.85rem; color: var(--text-muted);">${fac.name}</span></td>
-        <td>${p.subjectId}</td>
-        <td>${sub.name}</td>
-        <td>Year ${sub.year} (${sub.dep})</td>
-        <td>Sem ${sub.sem}</td>
+        <td><strong>${facId}</strong></td>
+        <td>${fac.name}</td>
+        <td><span class="badge badge-admin">${depts || 'N/A'}</span></td>
+        <td>${prefHtml}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -304,11 +365,13 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = '';
 
     const deptVal = document.getElementById('pref-dept-filter').value;
-    const yearVal = document.getElementById('pref-year-filter').value;
     const semVal = document.getElementById('pref-sem-filter').value;
 
-    if (!deptVal || !yearVal || !semVal) {
-      tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 15px;">Please select Department, Academic Year, and Semester to view pending submissions.</td></tr>`;
+    const academicYearInput = document.getElementById('pref-academic-year-input');
+    const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '';
+
+    if (!academicYearVal || !deptVal || !semVal) {
+      tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 15px;">Please enter Academic Year, select Department, and select Semester to view pending submissions.</td></tr>`;
       return;
     }
 
@@ -319,11 +382,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Filter subjects by selected criteria
     let matchingSubjects = allSubjects;
+    if (academicYearVal) {
+      matchingSubjects = matchingSubjects.filter(s => s.academicYear && s.academicYear.toLowerCase() === academicYearVal.toLowerCase());
+    }
     if (deptVal) {
       matchingSubjects = matchingSubjects.filter(s => getSubjectDeptCode(s) === deptVal.toUpperCase());
-    }
-    if (yearVal) {
-      matchingSubjects = matchingSubjects.filter(s => Number(s.year) === Number(yearVal));
     }
     if (semVal) {
       matchingSubjects = matchingSubjects.filter(s => Number(s.sem) === Number(semVal));
@@ -340,7 +403,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Pending faculty are those in the facultyList who have not selected any filtered subject
-    // But if matchingSubjects is empty, it means no subjects match the filter, so nobody is pending.
     const pendingFaculty = (matchingSubjects.length === 0) 
       ? [] 
       : data.facultyList.filter(f => !submittedFacultyIds.has(f.id));
@@ -365,8 +427,18 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPreferencesTable();
     renderPendingTable();
   }
+  const academicYearInput = document.getElementById('pref-academic-year-input');
+  if (academicYearInput) {
+    academicYearInput.addEventListener('change', () => {
+      loadFacultySelections();
+    });
+    academicYearInput.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') {
+        loadFacultySelections();
+      }
+    });
+  }
   document.getElementById('pref-dept-filter').addEventListener('change', handleFilterChange);
-  document.getElementById('pref-year-filter').addEventListener('change', handleFilterChange);
   document.getElementById('pref-sem-filter').addEventListener('change', handleFilterChange);
 
   // ----------------------------------------------------
@@ -1654,6 +1726,134 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Update Failed', error.message || 'Failed to update profile details', 'error');
     }
   });
+
+  window.exportPreferencesToExcel = function() {
+    const academicYearInput = document.getElementById('pref-academic-year-input');
+    const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '';
+    if (!academicYearVal) {
+      showToast('Enter Year', 'Please enter an Academic Year first', 'warning');
+      return;
+    }
+
+    const data = window.preferencesData;
+    if (!data || !data.allPreferences || data.allPreferences.length === 0) {
+      showToast('No Data', 'No preference data available to export', 'warning');
+      return;
+    }
+
+    // Filter out orphaned preferences where faculty or subject no longer exists
+    const validPrefs = data.allPreferences.filter(p => data.facultyMap[p.facultyId] && data.subjectsMap[p.subjectId]);
+
+    // Group by faculty
+    const grouped = {};
+    const facultyOrder = [];
+    
+    // Sort all preferences by ID (ascending) to maintain selection order
+    validPrefs.sort((a, b) => Number(a.id) - Number(b.id));
+
+    validPrefs.forEach(p => {
+      if (!grouped[p.facultyId]) {
+        grouped[p.facultyId] = [];
+        facultyOrder.push(p.facultyId);
+      }
+      grouped[p.facultyId].push(p);
+    });
+
+    // Sort facultyOrder naturally by faculty ID
+    facultyOrder.sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' }));
+
+    if (facultyOrder.length === 0) {
+      showToast('No Preferences', 'No preferences found to export', 'warning');
+      return;
+    }
+
+    // Find the maximum number of preferences selected by any faculty
+    let maxPrefsCount = 0;
+    facultyOrder.forEach(facId => {
+      const prefsList = grouped[facId] || [];
+      if (prefsList.length > maxPrefsCount) {
+        maxPrefsCount = prefsList.length;
+      }
+    });
+
+    let tableHtml = '<table border="1">';
+    
+    // Build Header
+    tableHtml += '<thead><tr style="background-color: #14B8A6; color: #ffffff; font-weight: bold;">';
+    tableHtml += '<th>Faculty ID</th><th>Faculty Name</th><th>Faculty Department</th>';
+    for (let i = 1; i <= maxPrefsCount; i++) {
+      tableHtml += `<th>Preference ${i}</th>`;
+    }
+    tableHtml += '</tr></thead><tbody>';
+
+    // Build Rows
+    facultyOrder.forEach(facId => {
+      const fac = data.facultyMap[facId] || { name: 'Unknown Faculty' };
+      const prefsList = grouped[facId] || [];
+      
+      const depts = [...new Set(prefsList.map(p => {
+        const sub = data.subjectsMap[p.subjectId];
+        return sub ? getSubjectDeptCode(sub) : '';
+      }).filter(Boolean))].join('; ');
+
+      tableHtml += '<tr>';
+      tableHtml += `<td style="vnd.ms-excel.numberformat:@">${facId}</td>`;
+      tableHtml += `<td>${fac.name}</td>`;
+      tableHtml += `<td>${depts}</td>`;
+
+      // Fill in preferences
+      for (let i = 0; i < maxPrefsCount; i++) {
+        if (i < prefsList.length) {
+          const p = prefsList[i];
+          const sub = data.subjectsMap[p.subjectId];
+          if (sub) {
+            tableHtml += `<td>${sub.name} (${sub.id})</td>`;
+          } else {
+            tableHtml += '<td></td>';
+          }
+        } else {
+          tableHtml += '<td></td>';
+        }
+      }
+      tableHtml += '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+
+    const excelXml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Faculty Preferences</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+      </head>
+      <body>
+        ${tableHtml}
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([excelXml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Faculty_Preferences_${academicYearVal}.xls`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Export Success', 'Excel spreadsheet downloaded successfully', 'success');
+  };
 
   // Initial load on startup
   loadFacultySelections();

@@ -63,4 +63,9 @@ public class FacultyController {
     public ResponseEntity<List<FacultySubjectPreference>> getAllPreferences() {
         return ResponseEntity.ok(subjectService.getAllPreferences());
     }
+
+    @GetMapping("/preferences/by-academic-year")
+    public ResponseEntity<List<FacultySubjectPreference>> getPreferencesByAcademicYear(@RequestParam String academicYear) {
+        return ResponseEntity.ok(subjectService.getPreferencesByAcademicYear(academicYear));
+    }
 }

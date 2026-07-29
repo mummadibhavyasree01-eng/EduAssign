@@ -81,22 +81,25 @@
         <div class="tab-grid">
           <!-- Submitted Preferences -->
           <div class="glass-panel section-container col-span-2">
-            <div class="section-actions">
+            <div class="section-actions" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
               <div>
                 <h3>Faculty Subject Preferences</h3>
                 <p>Track choices made by faculty members for subject allocation</p>
               </div>
+              <div>
+                <button class="btn btn-secondary btn-sm" onclick="exportPreferencesToExcel()" style="background: var(--secondary-gradient); border: none; color: #fff; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 0 10px rgba(20, 184, 166, 0.3);">
+                  <i class="fas fa-file-excel"></i> Export to Excel
+                </button>
+              </div>
             </div>
             
-            <div class="filter-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+            <div class="filter-row" style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+              <div>
+                <input type="text" id="pref-academic-year-input" class="form-control" placeholder="Enter Academic Year (e.g. 2026-27)">
+              </div>
               <div>
                 <select id="pref-dept-filter" class="form-control">
                   <option value="" disabled selected>Select Department</option>
-                </select>
-              </div>
-              <div>
-                <select id="pref-year-filter" class="form-control">
-                  <option value="" disabled selected>Select Academic Year</option>
                 </select>
               </div>
               <div>
@@ -110,15 +113,14 @@
               <table class="table">
                 <thead>
                   <tr>
-                    <th>Faculty</th>
-                    <th>Subject Code</th>
-                    <th>Subject Name</th>
-                    <th>Year / Dept</th>
-                    <th>Semester</th>
+                    <th>Faculty ID</th>
+                    <th>Faculty Name</th>
+                    <th>Department</th>
+                    <th>Subject Preferences (in Order of Choice)</th>
                   </tr>
                 </thead>
                 <tbody id="preferences-table-body">
-                  <tr><td colspan="5" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+                  <tr><td colspan="4" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -671,6 +673,6 @@
 
   <!-- Scripts -->
   <script src="js/common.js"></script>
-  <script src="js/admin.js"></script>
+  <script src="js/admin.js?v=2"></script>
 </body>
 </html>

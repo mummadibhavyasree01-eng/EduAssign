@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // State caches
   let subjects = [];
   let facultyPreferences = [];
+  let selectedOrder = [];
   let isSelectionPeriodActive = false;
 
   // Profile Form update
@@ -186,6 +187,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       subjects = Array.isArray(allSubjects) ? allSubjects : [];
       facultyPreferences = Array.isArray(preferences) ? preferences : [];
+      selectedOrder = facultyPreferences.map(p => p.subjectId);
 
       // Filter subjects according to active selection window filters
       if (selectionWindow && selectionWindow.active) {
@@ -207,6 +209,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  function updateIndicators() {
+    const subjectItems = document.querySelectorAll('.subject-item');
+    subjectItems.forEach(item => {
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      const indicator = item.querySelector('.pref-index-indicator');
+      if (!checkbox || !indicator) return;
+      const subId = checkbox.value;
+      const index = selectedOrder.indexOf(subId);
+      
+      if (index !== -1) {
+        checkbox.checked = true;
+        item.classList.add('selected');
+        indicator.innerText = index + 1;
+      } else {
+        checkbox.checked = false;
+        item.classList.remove('selected');
+        indicator.innerText = '';
+      }
+    });
+  }
+
   function renderSubjectPreferencesList(list) {
     const listContainer = document.getElementById('subject-checkboxes-container');
     listContainer.innerHTML = '';
@@ -216,84 +239,52 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // Set of currently preferred subject IDs for easy lookup
-    const preferredIds = new Set(facultyPreferences.map(p => p.subjectId));
-
-    // Group list by Year, then by Sem
-    const grouped = {};
-    list.forEach(sub => {
-      const y = sub.year;
-      const s = sub.sem;
-      if (!grouped[y]) grouped[y] = {};
-      if (!grouped[y][s]) grouped[y][s] = [];
-      grouped[y][s].push(sub);
+    // Sort list by year, then sem, then ID
+    const sortedList = [...list].sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      if (a.sem !== b.sem) return a.sem - b.sem;
+      return a.id.localeCompare(b.id);
     });
 
-    // Sort years and semesters
-    const years = Object.keys(grouped).sort((a,b) => Number(a) - Number(b));
+    sortedList.forEach(sub => {
+      const isChecked = selectedOrder.includes(sub.id);
+      
+      const item = document.createElement('div');
+      item.className = `subject-item ${isChecked ? 'selected' : ''}`;
+      
+      item.innerHTML = `
+        <input type="checkbox" id="chk-${sub.id}" value="${sub.id}" ${isChecked ? 'checked' : ''} style="display: none;">
+        <div class="pref-index-indicator"></div>
+        <div class="subject-details">
+          <span>${sub.name} <code style="color: var(--text-muted); font-size: 0.82rem; font-weight: normal; margin-left: 6px;">${sub.id}</code></span>
+          <small>Year ${sub.year} Sem ${sub.sem} • Dept: ${sub.dep} • Regulation: ${sub.regulation}</small>
+        </div>
+      `;
 
-    // Simple label generator
-    const getYearLabel = (yrNo) => {
-      const roman = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI' };
-      return roman[yrNo] ? `${roman[yrNo]} Year` : `Year ${yrNo}`;
-    };
-
-    years.forEach(y => {
-      const sems = Object.keys(grouped[y]).sort((a,b) => Number(a) - Number(b));
-      sems.forEach(s => {
-        // Create a header for the group
-        const groupHeader = document.createElement('div');
-        groupHeader.className = 'subject-group-header';
-        groupHeader.style.padding = '12px 16px';
-        groupHeader.style.marginTop = '16px';
-        groupHeader.style.marginBottom = '8px';
-        groupHeader.style.background = 'rgba(99, 102, 241, 0.06)';
-        groupHeader.style.borderLeft = '4px solid var(--primary)';
-        groupHeader.style.borderRadius = '4px';
-        groupHeader.style.fontSize = '0.9rem';
-        groupHeader.style.fontWeight = 'bold';
-        groupHeader.style.color = 'var(--secondary)';
-        groupHeader.innerHTML = `<i class="fas fa-bookmark" style="margin-right: 8px;"></i> ${getYearLabel(y)} - Semester ${s}`;
-        listContainer.appendChild(groupHeader);
-
-        // Render subjects in this group
-        grouped[y][s].forEach(sub => {
-          const isChecked = preferredIds.has(sub.id);
-          
-          const item = document.createElement('div');
-          item.className = `subject-item ${isChecked ? 'selected' : ''}`;
-          
-          item.innerHTML = `
-            <input type="checkbox" id="chk-${sub.id}" value="${sub.id}" ${isChecked ? 'checked' : ''}>
-            <div class="subject-details">
-              <span>${sub.name} <code style="color: var(--text-muted); font-size: 0.82rem; font-weight: normal; margin-left: 6px;">${sub.id}</code></span>
-              <small>Year ${sub.year} Sem ${sub.sem} • Dept: ${sub.dep} • Regulation: ${sub.regulation}</small>
-            </div>
-          `;
-
-          // Handle item checkbox change visual styling
-          const checkbox = item.querySelector('input[type="checkbox"]');
-          
-          checkbox.addEventListener('change', () => {
-            if (checkbox.checked) {
-              item.classList.add('selected');
-            } else {
-              item.classList.remove('selected');
-            }
-          });
-
-          // Clicking the item container also checks/unchecks the box (except when selecting text)
-          item.addEventListener('click', (e) => {
-            if (e.target !== checkbox && !e.target.closest('label') && isSelectionPeriodActive) {
-              checkbox.checked = !checkbox.checked;
-              checkbox.dispatchEvent(new Event('change'));
-            }
-          });
-
-          listContainer.appendChild(item);
-        });
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          if (!selectedOrder.includes(sub.id)) {
+            selectedOrder.push(sub.id);
+          }
+        } else {
+          selectedOrder = selectedOrder.filter(id => id !== sub.id);
+        }
+        updateIndicators();
       });
+
+      item.addEventListener('click', (e) => {
+        if (e.target !== checkbox && !e.target.closest('label') && isSelectionPeriodActive) {
+          checkbox.checked = !checkbox.checked;
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      });
+
+      listContainer.appendChild(item);
     });
+
+    updateIndicators();
   }
 
   // Client-side Subject Search
@@ -316,9 +307,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const checkedBoxes = document.querySelectorAll('#subject-checkboxes-container input[type="checkbox"]:checked');
-    const selectedSubjectIds = Array.from(checkedBoxes).map(box => box.value);
-
     const submitBtn = document.getElementById('preferences-submit-btn');
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving preferences...';
@@ -326,13 +314,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       await apiRequest(`/faculty/preferences?facultyId=${currentUser.id}`, {
         method: 'POST',
-        body: selectedSubjectIds
+        body: selectedOrder
       });
       showToast('Preferences Saved', 'Subject preference selections saved', 'success');
       
       // Reload preferences to refresh local state cache
       const updatedPrefs = await apiRequest(`/faculty/preferences/${currentUser.id}`);
       facultyPreferences = Array.isArray(updatedPrefs) ? updatedPrefs : [];
+      selectedOrder = facultyPreferences.map(p => p.subjectId);
+      updateIndicators();
       
     } catch (error) {
       showToast('Save Failed', error.message || 'Error saving subject choices', 'error');

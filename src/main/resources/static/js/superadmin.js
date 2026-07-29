@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (targetId === 'faculty-section') {
         loadFaculty();
       } else if (targetId === 'report-section') {
-        loadReportYears();
+        initReportFilters();
       }
     });
   });
@@ -394,57 +394,98 @@ document.addEventListener('DOMContentLoaded', () => {
   // ----------------------------------------------------
   // REPORT LOGIC
   // ----------------------------------------------------
-  async function loadReportYears() {
-    const select = document.getElementById('report-year-select');
-    if (!select) return;
-    select.innerHTML = '<option value="">Loading...</option>';
-    
+  let departments = [];
+  let semesters = [];
+
+  async function loadConfigOptions() {
     try {
-      const years = await apiRequest('/superadmin/reports/academic-years');
-      select.innerHTML = '';
-      const yearsList = Array.isArray(years) ? years : (years ? [years] : []);
-      if (yearsList.length === 0) {
-        select.innerHTML = '<option value="2026-27">2026-27</option>';
-      } else {
-        yearsList.forEach(yr => {
-          const opt = document.createElement('option');
-          opt.value = yr;
-          opt.innerText = yr;
-          select.appendChild(opt);
-        });
-      }
-      loadReportData();
+      departments = await apiRequest('/sections/departments');
+      semesters = await apiRequest('/sections/semesters');
     } catch (error) {
-      showToast('Error', 'Could not load academic years', 'error');
-      select.innerHTML = '<option value="2026-27">2026-27</option>';
-      loadReportData();
+      showToast('Error', 'Failed to load configuration options', 'error');
     }
+  }
+
+  function populateReportFilterDropdowns() {
+    const deptFilter = document.getElementById('report-dept-select');
+    const semFilter = document.getElementById('report-sem-select');
+
+    if (deptFilter && deptFilter.options.length <= 1) {
+      departments.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.code;
+        opt.innerText = `${d.code} - ${d.name}`;
+        deptFilter.appendChild(opt);
+      });
+    }
+
+    if (semFilter && semFilter.options.length <= 1) {
+      const sortedSems = [...semesters].sort((a,b) => a.semNumber - b.semNumber);
+      sortedSems.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.semNumber;
+        opt.innerText = s.name;
+        semFilter.appendChild(opt);
+      });
+    }
+  }
+  async function initReportFilters() {
+    const tbody = document.getElementById('report-table-body');
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">Please enter Academic Year, select Department, and select Semester to view the report.</td></tr>`;
+    }
+    
+    if (departments.length === 0 || semesters.length === 0) {
+      await loadConfigOptions();
+    }
+    populateReportFilterDropdowns();
   }
 
   async function loadReportData() {
     const tbody = document.getElementById('report-table-body');
     if (!tbody) return;
-    const yearSelect = document.getElementById('report-year-select');
-    const selectedYear = yearSelect ? yearSelect.value : '2026-27';
-    
-    if (!selectedYear) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Please select a year.</td></tr>`;
+
+    const academicYearInput = document.getElementById('report-academic-year-input');
+    const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '';
+
+    const deptSelect = document.getElementById('report-dept-select');
+    const deptVal = deptSelect ? deptSelect.value : '';
+
+    const semSelect = document.getElementById('report-sem-select');
+    const semVal = semSelect ? semSelect.value : '';
+
+    if (!academicYearVal || !deptVal || !semVal) {
+      tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">Please enter Academic Year, select Department, and select Semester to view the report.</td></tr>`;
       return;
     }
-    
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 12px; display: block;"></i> Loading report data for ${selectedYear}...</td></tr>`;
-    
+
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 12px; display: block;"></i> Loading report data...</td></tr>`;
+
     try {
-      const data = await apiRequest(`/superadmin/reports/allocations?academicYear=${encodeURIComponent(selectedYear)}`);
-      reportData = Array.isArray(data) ? data : [];
-      
+      const data = await apiRequest(`/superadmin/reports/allocations?academicYear=${encodeURIComponent(academicYearVal)}`);
+      let fetchedReportData = Array.isArray(data) ? data : [];
+
+      // Filter allocations matching the chosen department and semester
+      reportData = fetchedReportData.map(fac => {
+        const filteredAllocations = (fac.allocations || []).filter(a => {
+          const matchDept = a.department && a.department.toUpperCase() === deptVal.toUpperCase();
+          const matchSem = a.semester && Number(a.semester) === Number(semVal);
+          return matchDept && matchSem;
+        });
+
+        return {
+          ...fac,
+          allocations: filteredAllocations
+        };
+      }).filter(fac => fac.allocations.length > 0);
+
       // Sort report data naturally by faculty ID
       reportData.sort((a, b) => (a.facultyId || '').localeCompare(b.facultyId || '', 'en', { numeric: true, sensitivity: 'base' }));
-      
+
       renderReportTable(reportData);
     } catch (error) {
       showToast('Load Error', 'Could not fetch report data', 'error');
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--error);">Failed to load report data.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--error);">Failed to load report data: ${error.message}</td></tr>`;
     }
   }
 
@@ -454,7 +495,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = '';
     
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No matching records found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">No matching records found.</td></tr>`;
       return;
     }
     
@@ -462,38 +503,41 @@ document.addEventListener('DOMContentLoaded', () => {
       const tr = document.createElement('tr');
       
       let subjectsHtml = '';
-      let sectionsHtml = '';
-      let statusHtml = '';
       
       if (fac.allocations && fac.allocations.length > 0) {
         subjectsHtml = fac.allocations.map(a => `<div style="margin-bottom: 6px;"><strong>${a.subjectId || ''}</strong> - ${a.subjectName || ''}</div>`).join('');
-        sectionsHtml = fac.allocations.map(a => `<div style="margin-bottom: 6px;"><span class="badge badge-admin">${a.sectionName || ''}</span></div>`).join('');
-        statusHtml = fac.allocations.map(a => {
-          const badgeClass = a.status === 'Finalized' ? 'badge-finalized' : 'badge-draft';
-          return `<div style="margin-bottom: 6px;"><span class="badge ${badgeClass}">${a.status || ''}</span></div>`;
-        }).join('');
       } else {
         subjectsHtml = '<span style="color: var(--text-muted); font-style: italic;">No allocations</span>';
-        sectionsHtml = '<span style="color: var(--text-disabled);">-</span>';
-        statusHtml = '<span style="color: var(--text-disabled);">-</span>';
       }
       
       tr.innerHTML = `
         <td><strong>${fac.facultyId || ''}</strong></td>
         <td>${fac.name || ''}</td>
-        <td>${fac.email || ''}</td>
         <td>${subjectsHtml}</td>
-        <td>${sectionsHtml}</td>
-        <td>${statusHtml}</td>
       `;
       tbody.appendChild(tr);
     });
   }
 
   // Bind change and search listeners with null guards
-  const yearSelectEl = document.getElementById('report-year-select');
-  if (yearSelectEl) {
-    yearSelectEl.addEventListener('change', loadReportData);
+  const academicYearInputEl = document.getElementById('report-academic-year-input');
+  if (academicYearInputEl) {
+    academicYearInputEl.addEventListener('change', loadReportData);
+    academicYearInputEl.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') {
+        loadReportData();
+      }
+    });
+  }
+
+  const deptSelectEl = document.getElementById('report-dept-select');
+  if (deptSelectEl) {
+    deptSelectEl.addEventListener('change', loadReportData);
+  }
+
+  const semSelectEl = document.getElementById('report-sem-select');
+  if (semSelectEl) {
+    semSelectEl.addEventListener('change', loadReportData);
   }
 
   const searchEl = document.getElementById('report-search');
@@ -522,58 +566,97 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   window.exportReportToExcel = function() {
-    const yearSelect = document.getElementById('report-year-select');
-    const selectedYear = yearSelect ? yearSelect.value : '2026-27';
+    const academicYearInput = document.getElementById('report-academic-year-input');
+    const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '';
+    if (!academicYearVal) {
+      showToast('Enter Year', 'Please enter an Academic Year first', 'warning');
+      return;
+    }
+
     if (!reportData || reportData.length === 0) {
       showToast('No Data', 'No report data available to export', 'warning');
       return;
     }
 
-    let csvRows = [];
-    csvRows.push("Faculty ID,Faculty Name,Email ID,Subject Code,Subject Name,Department,Semester,Section Name,Status");
-
+    // Find the maximum number of allocations selected by any faculty
+    let maxAllocCount = 0;
     reportData.forEach(fac => {
-      if (fac.allocations && fac.allocations.length > 0) {
-        fac.allocations.forEach(a => {
-          const row = [
-            `"${(fac.facultyId || '').replace(/"/g, '""')}"`,
-            `"${(fac.name || '').replace(/"/g, '""')}"`,
-            `"${(fac.email || '').replace(/"/g, '""')}"`,
-            `"${(a.subjectId || '').replace(/"/g, '""')}"`,
-            `"${(a.subjectName || '').replace(/"/g, '""')}"`,
-            `"${(a.department || '').replace(/"/g, '""')}"`,
-            `"${a.semester || ''}"`,
-            `"${(a.sectionName || '').replace(/"/g, '""')}"`,
-            `"${a.status || ''}"`
-          ].join(",");
-          csvRows.push(row);
-        });
-      } else {
-        const row = [
-          `"${(fac.facultyId || '').replace(/"/g, '""')}"`,
-          `"${(fac.name || '').replace(/"/g, '""')}"`,
-          `"${(fac.email || '').replace(/"/g, '""')}"`,
-          `""`,
-          `"No Allocation"`,
-          `""`,
-          `""`,
-          `""`,
-          `""`
-        ].join(",");
-        csvRows.push(row);
+      const allocs = fac.allocations || [];
+      if (allocs.length > maxAllocCount) {
+        maxAllocCount = allocs.length;
       }
     });
 
-    const csvContent = csvRows.join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    let tableHtml = '<table border="1">';
+    
+    // Build Header
+    tableHtml += '<thead><tr style="background-color: #14B8A6; color: #ffffff; font-weight: bold;">';
+    tableHtml += '<th>Faculty ID</th><th>Faculty Name</th>';
+    for (let i = 1; i <= maxAllocCount; i++) {
+      tableHtml += `<th>Allocated Subject ${i}</th>`;
+    }
+    if (maxAllocCount === 0) {
+      tableHtml += '<th>Allocated Subjects</th>';
+    }
+    tableHtml += '</tr></thead><tbody>';
+
+    // Build Rows
+    reportData.forEach(fac => {
+      tableHtml += '<tr>';
+      tableHtml += `<td style="vnd.ms-excel.numberformat:@">${fac.facultyId || ''}</td>`;
+      tableHtml += `<td>${fac.name || ''}</td>`;
+
+      const allocs = fac.allocations || [];
+      if (maxAllocCount === 0) {
+        tableHtml += '<td>No allocations</td>';
+      } else {
+        for (let i = 0; i < maxAllocCount; i++) {
+          if (i < allocs.length) {
+            const a = allocs[i];
+            tableHtml += `<td>${a.subjectName || ''} (${a.subjectId || ''})</td>`;
+          } else {
+            tableHtml += '<td></td>';
+          }
+        }
+      }
+      tableHtml += '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+
+    const excelXml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Allocation Report</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+      </head>
+      <body>
+        ${tableHtml}
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([excelXml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `EduAssign_Allocation_Report_${selectedYear}.csv`);
+    link.setAttribute("download", `Allocation_Report_${academicYearVal}.xls`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast('Export Success', 'CSV report downloaded successfully', 'success');
+    showToast('Export Success', 'Excel report downloaded successfully', 'success');
   };
 
   // Initial load
