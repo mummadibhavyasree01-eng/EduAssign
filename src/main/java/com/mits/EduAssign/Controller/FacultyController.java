@@ -25,7 +25,7 @@ public class FacultyController {
     @PostMapping("/preferences")
     public ResponseEntity<?> savePreferences(
             @RequestParam String facultyId,
-            @RequestBody List<String> subjectIds) {
+            @RequestBody List<java.util.Map<String, Object>> preferenceList) {
         
         // Check if selection period is still active
         if (!subjectService.isBeforeDeadline()) {
@@ -33,7 +33,16 @@ public class FacultyController {
                     .body("Subject selection window is closed or deadline has passed.");
         }
         
-        subjectService.savePreferences(facultyId, subjectIds);
+        List<FacultySubjectPreference> prefs = new java.util.ArrayList<>();
+        for (java.util.Map<String, Object> m : preferenceList) {
+            String subId = (String) m.get("subjectId");
+            Boolean isMockVal = (Boolean) m.get("mock");
+            boolean isMock = isMockVal != null && isMockVal;
+            FacultySubjectPreference p = new FacultySubjectPreference(facultyId, subId, isMock);
+            prefs.add(p);
+        }
+        
+        subjectService.savePreferencesEntity(facultyId, prefs);
         return ResponseEntity.ok("Preferences saved successfully");
     }
 

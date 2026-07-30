@@ -66,15 +66,20 @@ public class SubjectController {
             @PathVariable String id,
             @RequestBody Subject subject) {
 
-        Subject updated =
-                subjectService.updateSubject(id, subject);
+        try {
+            Subject updated =
+                    subjectService.updateSubject(id, subject);
 
-        if(updated == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body("Subject Not Found");
+            if(updated == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body("Subject Not Found");
+            }
+
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(e.getMessage());
         }
-
-        return ResponseEntity.ok(updated);
     }
 
     @DeleteMapping("/delete/{id}")

@@ -162,20 +162,28 @@
             </div>
           </div>
 
-          <div class="filter-row" style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
-            <div>
-              <input type="text" id="report-academic-year-input" class="form-control" placeholder="Enter Academic Year (e.g. 2026-27)" style="height: 40px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px;">
+          <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 500px;">
+            <div style="flex: 1; max-width: 220px;">
+              <input type="text" id="report-academic-year-input" class="form-control" placeholder="Academic Year (e.g. 2026-27)" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
             </div>
-            <div>
-              <select id="report-dept-select" class="form-control" style="height: 40px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px;">
-                <option value="" disabled selected>Select Department</option>
-              </select>
+            <div style="flex: 1; max-width: 220px; position: relative;">
+              <div id="custom-dept-dropdown" class="custom-dropdown" style="width: 100%;">
+                <div class="custom-dropdown-trigger" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+                  <span id="custom-dept-trigger-label" style="color: var(--text-muted);">Select Dept & Sem</span>
+                  <i class="fas fa-chevron-down" style="font-size: 0.8rem; color: var(--text-muted);"></i>
+                </div>
+                <div id="custom-dept-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+                  <!-- Populated dynamically via JS -->
+                </div>
+              </div>
             </div>
-            <div>
-              <select id="report-sem-select" class="form-control" style="height: 40px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px;">
-                <option value="" disabled selected>Select Semester</option>
-              </select>
-            </div>
+            <!-- Hidden native selects to retain full compatibility -->
+            <select id="report-dept-select" style="display: none;">
+              <option value="" disabled selected>Select Department</option>
+            </select>
+            <select id="report-sem-select" style="display: none;">
+              <option value="" disabled selected>Select Semester</option>
+            </select>
           </div>
           
           <div class="search-bar-wrapper" style="margin-bottom: 20px; position: relative;">
@@ -189,12 +197,15 @@
                 <tr>
                   <th>Faculty ID</th>
                   <th>Faculty Name</th>
-                  <th>Allocated Subject(s)</th>
+                  <th>Year 1</th>
+                  <th>Year 2</th>
+                  <th>Year 3</th>
+                  <th>Year 4</th>
                 </tr>
               </thead>
               <tbody id="report-table-body">
                 <tr>
-                  <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                  <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;">
                     <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 12px; display: block;"></i> Loading report data...
                   </td>
                 </tr>

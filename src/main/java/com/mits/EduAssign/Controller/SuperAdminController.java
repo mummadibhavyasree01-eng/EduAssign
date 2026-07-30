@@ -16,12 +16,14 @@ import org.springframework.web.bind.annotation.*;
 
 import com.mits.EduAssign.Entity.AdminFaculty;
 import com.mits.EduAssign.Entity.AllocationHistory;
+import com.mits.EduAssign.Entity.FacultySubjectPreference;
 import com.mits.EduAssign.Entity.SectionAllocation;
 import com.mits.EduAssign.Entity.Subject;
 import com.mits.EduAssign.Entity.SubjectAllocation;
 import com.mits.EduAssign.Repository.AdminRepository;
 import com.mits.EduAssign.Repository.AllocationHistoryRepository;
 import com.mits.EduAssign.Repository.AllocationRepository;
+import com.mits.EduAssign.Repository.PreferenceRepository;
 import com.mits.EduAssign.Repository.SectionAllocationRepository;
 import com.mits.EduAssign.Repository.SelectionWindowRepository;
 import com.mits.EduAssign.Repository.SubjectRepository;
@@ -47,6 +49,9 @@ public class SuperAdminController {
 
     @Autowired
     private AllocationRepository allocationRepository;
+
+    @Autowired
+    private PreferenceRepository preferenceRepository;
 
     @PutMapping("/update")
     public ResponseEntity<?> updateProfile(@RequestBody AdminFaculty updatedAdmin) {
@@ -119,6 +124,18 @@ public class SuperAdminController {
                         (existing, replacing) -> existing
                 ));
 
+        // Fetch all preferences and group them by faculty to find the choice number
+        List<FacultySubjectPreference> allPrefs = preferenceRepository.findAll().stream()
+                .filter(p -> !p.isMock())
+                .collect(Collectors.toList());
+        allPrefs.sort(java.util.Comparator.comparing(FacultySubjectPreference::getId));
+        Map<String, List<String>> facultyPrefsMap = new HashMap<>();
+        for (FacultySubjectPreference p : allPrefs) {
+            if (p.getFacultyId() != null && p.getSubjectId() != null) {
+                facultyPrefsMap.computeIfAbsent(p.getFacultyId().toLowerCase(), k -> new ArrayList<>()).add(p.getSubjectId().toLowerCase());
+            }
+        }
+
         // Fetch active allocations
         List<SectionAllocation> activeSecAllocs = sectionAllocationRepository.findAll();
         List<SubjectAllocation> activeSubAllocs = allocationRepository.findAll();
@@ -133,6 +150,9 @@ public class SuperAdminController {
             // LinkedHashMap to maintain order and avoid duplicates (Key: subjectId + "_" + sectionName)
             Map<String, Map<String, Object>> allocMap = new LinkedHashMap<>();
 
+            // Helper to get preference choice number (1-based index)
+            List<String> prefSubjects = facultyPrefsMap.get(f.getId().toLowerCase());
+
             // 1. Add historical allocations
             for (AllocationHistory h : historyList) {
                 if (h.getFacultyId() != null && h.getFacultyId().equalsIgnoreCase(f.getId())) {
@@ -144,6 +164,16 @@ public class SuperAdminController {
                     alloc.put("semester", h.getSemester());
                     alloc.put("sectionName", h.getSectionName() != null ? h.getSectionName() : "N/A");
                     alloc.put("status", "Finalized");
+                    alloc.put("year", sub != null ? sub.getYear() : 0);
+                    
+                    int prefNum = -1;
+                    if (prefSubjects != null && h.getSubjectId() != null) {
+                        int idx = prefSubjects.indexOf(h.getSubjectId().toLowerCase());
+                        if (idx != -1) {
+                            prefNum = idx + 1;
+                        }
+                    }
+                    alloc.put("preferenceNumber", prefNum);
                     
                     String key = h.getSubjectId() + "_" + (h.getSectionName() != null ? h.getSectionName() : "N/A");
                     allocMap.put(key, alloc);
@@ -164,6 +194,17 @@ public class SuperAdminController {
                             alloc.put("semester", sub.getSem());
                             alloc.put("sectionName", sa.getSectionName() != null ? sa.getSectionName() : "N/A");
                             alloc.put("status", sa.isFinalized() ? "Finalized" : "Draft");
+                            alloc.put("year", sub.getYear());
+                            
+                            int prefNum = -1;
+                            if (prefSubjects != null && sa.getSubjectId() != null) {
+                                int idx = prefSubjects.indexOf(sa.getSubjectId().toLowerCase());
+                                if (idx != -1) {
+                                    prefNum = idx + 1;
+                                }
+                            }
+                            alloc.put("preferenceNumber", prefNum);
+                            
                             allocMap.put(key, alloc);
                         }
                     }
@@ -191,6 +232,17 @@ public class SuperAdminController {
                             alloc.put("semester", sub.getSem());
                             alloc.put("sectionName", "N/A");
                             alloc.put("status", sa.isFinalized() ? "Finalized" : "Draft");
+                            alloc.put("year", sub.getYear());
+                            
+                            int prefNum = -1;
+                            if (prefSubjects != null && sa.getSubjectId() != null) {
+                                int idx = prefSubjects.indexOf(sa.getSubjectId().toLowerCase());
+                                if (idx != -1) {
+                                    prefNum = idx + 1;
+                                }
+                            }
+                            alloc.put("preferenceNumber", prefNum);
+                            
                             allocMap.put(key, alloc);
                         }
                     }

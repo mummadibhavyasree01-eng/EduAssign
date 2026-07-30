@@ -429,16 +429,134 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
+
+  function populateCustomDeptDropdown() {
+    const menuEl = document.getElementById('custom-dept-menu');
+    if (!menuEl) return;
+    
+    menuEl.innerHTML = '';
+    departments.forEach(d => {
+      const item = document.createElement('div');
+      item.className = 'custom-dept-item';
+      item.style.position = 'relative';
+      item.style.padding = '10px 12px';
+      item.style.cursor = 'pointer';
+      item.style.display = 'flex';
+      item.style.flexDirection = 'column';
+      item.style.alignItems = 'flex-start';
+      item.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+      item.style.color = 'var(--text-main)';
+      item.style.transition = 'all 0.2s ease';
+      
+      item.innerHTML = `
+        <div class="dept-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; pointer-events: none;">
+          <span>${d.code} - ${d.name}</span>
+          <i class="fas fa-chevron-down" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease;"></i>
+        </div>
+        <div class="custom-sem-submenu" style="display: none; justify-content: flex-start; gap: 8px; margin-top: 8px; width: 100%; box-sizing: border-box; padding: 4px 0;">
+          <button class="sem-opt-btn" data-dept="${d.code}" data-sem="1" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border); color: var(--text-main); padding: 6px 12px; text-align: left; font-size: 0.8rem; cursor: pointer; border-radius: var(--border-radius-sm); white-space: nowrap; transition: all 0.2s ease;">Sem 1</button>
+          <button class="sem-opt-btn" data-dept="${d.code}" data-sem="2" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border); color: var(--text-main); padding: 6px 12px; text-align: left; font-size: 0.8rem; cursor: pointer; border-radius: var(--border-radius-sm); white-space: nowrap; transition: all 0.2s ease;">Sem 2</button>
+        </div>
+      `;
+      
+      // Toggle submenu on hover or click
+      const showSubmenu = () => {
+        const submenu = item.querySelector('.custom-sem-submenu');
+        const arrow = item.querySelector('.fa-chevron-down');
+        if (submenu) submenu.style.display = 'flex';
+        if (arrow) arrow.style.transform = 'rotate(180deg)';
+        item.style.background = 'rgba(20, 184, 166, 0.05)';
+      };
+      
+      const hideSubmenu = () => {
+        const submenu = item.querySelector('.custom-sem-submenu');
+        const arrow = item.querySelector('.fa-chevron-down');
+        if (submenu) submenu.style.display = 'none';
+        if (arrow) arrow.style.transform = '';
+        item.style.background = '';
+      };
+      
+      item.addEventListener('mouseenter', showSubmenu);
+      item.addEventListener('mouseleave', hideSubmenu);
+      
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.sem-opt-btn')) return;
+        const submenu = item.querySelector('.custom-sem-submenu');
+        const isVisible = submenu && submenu.style.display === 'flex';
+        if (isVisible) {
+          hideSubmenu();
+        } else {
+          showSubmenu();
+        }
+      });
+      
+      menuEl.appendChild(item);
+    });
+
+    // Add click and hover listeners to semester buttons
+    menuEl.querySelectorAll('.sem-opt-btn').forEach(btn => {
+      btn.addEventListener('mouseenter', (e) => {
+        e.stopPropagation();
+        btn.style.background = 'var(--primary-gradient)';
+        btn.style.color = '#fff';
+      });
+      btn.addEventListener('mouseleave', (e) => {
+        e.stopPropagation();
+        btn.style.background = 'rgba(255, 255, 255, 0.05)';
+        btn.style.color = 'var(--text-main)';
+      });
+      
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const deptCode = btn.getAttribute('data-dept');
+        const semVal = btn.getAttribute('data-sem');
+        
+        // Update hidden native selects
+        const deptSelect = document.getElementById('report-dept-select');
+        const semSelect = document.getElementById('report-sem-select');
+        if (deptSelect) deptSelect.value = deptCode;
+        if (semSelect) semSelect.value = semVal;
+        
+        // Update trigger button text
+        const triggerLabel = document.getElementById('custom-dept-trigger-label');
+        if (triggerLabel) {
+          triggerLabel.innerText = `${deptCode} - Sem ${semVal}`;
+          triggerLabel.style.color = 'var(--text-main)';
+        }
+        
+        // Hide dropdown
+        menuEl.style.display = 'none';
+        
+        // Load report data
+        loadReportData();
+      });
+    });
+  }
+
   async function initReportFilters() {
     const tbody = document.getElementById('report-table-body');
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">Please enter Academic Year, select Department, and select Semester to view the report.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">Please enter Academic Year, select Department, and select Semester to view the report.</td></tr>`;
+    }
+    
+    // Clear selects
+    const deptSelect = document.getElementById('report-dept-select');
+    const semSelect = document.getElementById('report-sem-select');
+    if (deptSelect) deptSelect.value = '';
+    if (semSelect) semSelect.value = '';
+    
+    // Clear custom trigger label
+    const triggerLabel = document.getElementById('custom-dept-trigger-label');
+    if (triggerLabel) {
+      triggerLabel.innerText = 'Select Dept & Sem';
+      triggerLabel.style.color = 'var(--text-muted)';
     }
     
     if (departments.length === 0 || semesters.length === 0) {
       await loadConfigOptions();
     }
     populateReportFilterDropdowns();
+    populateCustomDeptDropdown();
   }
 
   async function loadReportData() {
@@ -455,11 +573,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const semVal = semSelect ? semSelect.value : '';
 
     if (!academicYearVal || !deptVal || !semVal) {
-      tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">Please enter Academic Year, select Department, and select Semester to view the report.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">Please enter Academic Year, select Department, and select Semester to view the report.</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 12px; display: block;"></i> Loading report data...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 12px; display: block;"></i> Loading report data...</td></tr>`;
 
     try {
       const data = await apiRequest(`/superadmin/reports/allocations?academicYear=${encodeURIComponent(academicYearVal)}`);
@@ -485,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderReportTable(reportData);
     } catch (error) {
       showToast('Load Error', 'Could not fetch report data', 'error');
-      tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--error);">Failed to load report data: ${error.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--error);">Failed to load report data: ${error.message}</td></tr>`;
     }
   }
 
@@ -495,25 +613,53 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = '';
     
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">No matching records found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No matching records found.</td></tr>`;
       return;
     }
     
     list.forEach(fac => {
       const tr = document.createElement('tr');
       
-      let subjectsHtml = '';
-      
+      // Group allocations by year (1, 2, 3, 4)
+      const yearAllocs = { 1: [], 2: [], 3: [], 4: [] };
       if (fac.allocations && fac.allocations.length > 0) {
-        subjectsHtml = fac.allocations.map(a => `<div style="margin-bottom: 6px;"><strong>${a.subjectId || ''}</strong> - ${a.subjectName || ''}</div>`).join('');
-      } else {
-        subjectsHtml = '<span style="color: var(--text-muted); font-style: italic;">No allocations</span>';
+        fac.allocations.forEach(a => {
+          const yr = a.year;
+          if (yearAllocs[yr]) {
+            yearAllocs[yr].push(a);
+          }
+        });
       }
+      
+      const renderYearCell = (allocs) => {
+        if (!allocs || allocs.length === 0) return '<span style="color: var(--text-disabled);">-</span>';
+        
+        // Chunk allocations into groups of 3
+        const chunks = [];
+        for (let i = 0; i < allocs.length; i += 3) {
+          chunks.push(allocs.slice(i, i + 3));
+        }
+
+        return chunks.map(chunk => {
+          const rowHtml = chunk.map(a => {
+            const secName = a.sectionName && a.sectionName !== 'N/A' ? ` - Sec ${a.sectionName}` : '';
+            return `
+              <div class="allocation-badge" style="background: rgba(20, 184, 166, 0.08); border: 1px solid rgba(20, 184, 166, 0.2); border-radius: 4px; padding: 4px 10px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; max-width: calc(33.33% - 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <span style="color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${a.subjectName || ''} <code style="color: var(--text-muted); font-size: 0.78rem;">(${a.subjectId || ''}${secName})</code></span>
+              </div>
+            `;
+          }).join('');
+          return `<div style="display: flex; flex-wrap: nowrap; gap: 8px; width: 100%; align-items: center; margin-bottom: 4px;">${rowHtml}</div>`;
+        }).join('');
+      };
       
       tr.innerHTML = `
         <td><strong>${fac.facultyId || ''}</strong></td>
         <td>${fac.name || ''}</td>
-        <td>${subjectsHtml}</td>
+        <td>${renderYearCell(yearAllocs[1])}</td>
+        <td>${renderYearCell(yearAllocs[2])}</td>
+        <td>${renderYearCell(yearAllocs[3])}</td>
+        <td>${renderYearCell(yearAllocs[4])}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -578,26 +724,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Find the maximum number of allocations selected by any faculty
-    let maxAllocCount = 0;
-    reportData.forEach(fac => {
-      const allocs = fac.allocations || [];
-      if (allocs.length > maxAllocCount) {
-        maxAllocCount = allocs.length;
-      }
-    });
-
     let tableHtml = '<table border="1">';
     
     // Build Header
     tableHtml += '<thead><tr style="background-color: #14B8A6; color: #ffffff; font-weight: bold;">';
     tableHtml += '<th>Faculty ID</th><th>Faculty Name</th>';
-    for (let i = 1; i <= maxAllocCount; i++) {
-      tableHtml += `<th>Allocated Subject ${i}</th>`;
-    }
-    if (maxAllocCount === 0) {
-      tableHtml += '<th>Allocated Subjects</th>';
-    }
+    tableHtml += '<th>Year 1</th><th>Year 2</th><th>Year 3</th><th>Year 4</th>';
     tableHtml += '</tr></thead><tbody>';
 
     // Build Rows
@@ -606,19 +738,27 @@ document.addEventListener('DOMContentLoaded', () => {
       tableHtml += `<td style="vnd.ms-excel.numberformat:@">${fac.facultyId || ''}</td>`;
       tableHtml += `<td>${fac.name || ''}</td>`;
 
+      // Group by year
+      const yearAllocs = { 1: [], 2: [], 3: [], 4: [] };
       const allocs = fac.allocations || [];
-      if (maxAllocCount === 0) {
-        tableHtml += '<td>No allocations</td>';
-      } else {
-        for (let i = 0; i < maxAllocCount; i++) {
-          if (i < allocs.length) {
-            const a = allocs[i];
-            tableHtml += `<td>${a.subjectName || ''} (${a.subjectId || ''})</td>`;
-          } else {
-            tableHtml += '<td></td>';
-          }
+      allocs.forEach(a => {
+        const yr = a.year;
+        if (yearAllocs[yr]) {
+          yearAllocs[yr].push(a);
         }
-      }
+      });
+
+      const getExcelCellText = (allocsList) => {
+        if (allocsList.length === 0) return '';
+        return allocsList.map(a => {
+          return `${a.subjectName || ''} (${a.subjectId || ''})`;
+        }).join(', ');
+      };
+
+      tableHtml += `<td>${getExcelCellText(yearAllocs[1])}</td>`;
+      tableHtml += `<td>${getExcelCellText(yearAllocs[2])}</td>`;
+      tableHtml += `<td>${getExcelCellText(yearAllocs[3])}</td>`;
+      tableHtml += `<td>${getExcelCellText(yearAllocs[4])}</td>`;
       tableHtml += '</tr>';
     });
     tableHtml += '</tbody></table>';
@@ -658,6 +798,25 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.removeChild(link);
     showToast('Export Success', 'Excel report downloaded successfully', 'success');
   };
+
+  // Set up custom dropdown toggle behavior
+  const customDeptDropdown = document.getElementById('custom-dept-dropdown');
+  if (customDeptDropdown) {
+    const triggerBtn = customDeptDropdown.querySelector('.custom-dropdown-trigger');
+    const menuEl = customDeptDropdown.querySelector('.custom-dropdown-menu');
+    
+    triggerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = menuEl.style.display === 'block';
+      menuEl.style.display = isVisible ? 'none' : 'block';
+    });
+    
+    document.addEventListener('click', (e) => {
+      if (!customDeptDropdown.contains(e.target)) {
+        menuEl.style.display = 'none';
+      }
+    });
+  }
 
   // Initial load
   loadUsers();

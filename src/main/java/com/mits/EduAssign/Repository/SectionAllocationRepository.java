@@ -11,4 +11,5 @@ public interface SectionAllocationRepository extends JpaRepository<SectionAlloca
     List<SectionAllocation> findByFacultyIdAndFinalized(String facultyId, boolean finalized);
     SectionAllocation findBySubjectIdAndSectionName(String subjectId, String sectionName);
     SectionAllocation findBySubjectIdAndFacultyId(String subjectId, String facultyId);
+    List<SectionAllocation> findBySubjectId(String subjectId);
 }

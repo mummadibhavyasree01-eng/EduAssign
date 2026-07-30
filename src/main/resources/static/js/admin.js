@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   profileEmailInput.value = currentUser.email;
 
   // State caches
+  let currentSubjectViewType = 'regular';
   let subjectList = [];
   let departments = [];
   let academicYears = [];
@@ -143,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       populateFilterDropdowns();
+      populateCustomPrefDropdown();
 
       const academicYearInput = document.getElementById('pref-academic-year-input');
       const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '2026-27';
@@ -236,6 +238,226 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function populateCustomPrefDropdown() {
+    const menuEl = document.getElementById('custom-pref-dept-menu');
+    if (!menuEl) return;
+    
+    menuEl.innerHTML = '';
+    departments.forEach(d => {
+      const item = document.createElement('div');
+      item.className = 'custom-dept-item';
+      item.style.position = 'relative';
+      item.style.padding = '10px 12px';
+      item.style.cursor = 'pointer';
+      item.style.display = 'flex';
+      item.style.flexDirection = 'column';
+      item.style.alignItems = 'flex-start';
+      item.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+      item.style.color = 'var(--text-main)';
+      item.style.transition = 'all 0.2s ease';
+      
+      item.innerHTML = `
+        <div class="dept-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; pointer-events: none;">
+          <span>${d.code} - ${d.name}</span>
+          <i class="fas fa-chevron-down" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease;"></i>
+        </div>
+        <div class="custom-sem-submenu" style="display: none; flex-direction: column; gap: 4px; margin-top: 8px; width: 100%; padding-left: 12px; box-sizing: border-box;">
+          ${semesters.map(s => `
+            <button type="button" class="sem-opt-btn" data-dept="${d.code}" data-sem="${s.semNumber}" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border); border-radius: var(--border-radius-sm); color: var(--text-main); padding: 6px 12px; font-size: 0.82rem; text-align: left; width: 100%; cursor: pointer; transition: all 0.2s ease;">
+              ${s.name}
+            </button>
+          `).join('')}
+        </div>
+      `;
+      
+      const showSubmenu = () => {
+        const submenu = item.querySelector('.custom-sem-submenu');
+        const arrow = item.querySelector('.fa-chevron-down');
+        if (submenu) submenu.style.display = 'flex';
+        if (arrow) arrow.style.transform = 'rotate(180deg)';
+        item.style.background = 'rgba(20, 184, 166, 0.05)';
+      };
+      
+      const hideSubmenu = () => {
+        const submenu = item.querySelector('.custom-sem-submenu');
+        const arrow = item.querySelector('.fa-chevron-down');
+        if (submenu) submenu.style.display = 'none';
+        if (arrow) arrow.style.transform = '';
+        item.style.background = '';
+      };
+      
+      item.addEventListener('mouseenter', showSubmenu);
+      item.addEventListener('mouseleave', hideSubmenu);
+      
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.sem-opt-btn')) return;
+        const submenu = item.querySelector('.custom-sem-submenu');
+        const isVisible = submenu && submenu.style.display === 'flex';
+        if (isVisible) {
+          hideSubmenu();
+        } else {
+          showSubmenu();
+        }
+      });
+      
+      menuEl.appendChild(item);
+    });
+
+    // Add click and hover listeners to semester buttons
+    menuEl.querySelectorAll('.sem-opt-btn').forEach(btn => {
+      btn.addEventListener('mouseenter', (e) => {
+        e.stopPropagation();
+        btn.style.background = 'var(--primary-gradient)';
+        btn.style.color = '#fff';
+      });
+      btn.addEventListener('mouseleave', (e) => {
+        e.stopPropagation();
+        btn.style.background = 'rgba(255, 255, 255, 0.05)';
+        btn.style.color = 'var(--text-main)';
+      });
+      
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const deptCode = btn.getAttribute('data-dept');
+        const semVal = btn.getAttribute('data-sem');
+        
+        // Update hidden native selects
+        const deptSelect = document.getElementById('pref-dept-filter');
+        const semSelect = document.getElementById('pref-sem-filter');
+        if (deptSelect) {
+          deptSelect.value = deptCode;
+          deptSelect.dispatchEvent(new Event('change'));
+        }
+        if (semSelect) {
+          semSelect.value = semVal;
+          semSelect.dispatchEvent(new Event('change'));
+        }
+        
+        // Update trigger button text
+        const triggerLabel = document.getElementById('custom-pref-trigger-label');
+        if (triggerLabel) {
+          triggerLabel.innerText = `${deptCode} - Sem ${semVal}`;
+          triggerLabel.style.color = 'var(--text-main)';
+        }
+        
+        // Hide dropdown
+        const dropdownMenu = document.getElementById('custom-pref-dept-menu');
+        if (dropdownMenu) dropdownMenu.style.display = 'none';
+      });
+    });
+  }
+
+  function populateCustomSubDropdown() {
+    const menuEl = document.getElementById('custom-sub-year-menu');
+    if (!menuEl) return;
+    
+    menuEl.innerHTML = '';
+    academicYears.forEach(y => {
+      const item = document.createElement('div');
+      item.className = 'custom-dept-item';
+      item.style.position = 'relative';
+      item.style.padding = '10px 12px';
+      item.style.cursor = 'pointer';
+      item.style.display = 'flex';
+      item.style.flexDirection = 'column';
+      item.style.alignItems = 'flex-start';
+      item.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+      item.style.color = 'var(--text-main)';
+      item.style.transition = 'all 0.2s ease';
+      
+      item.innerHTML = `
+        <div class="dept-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; pointer-events: none;">
+          <span>${y.name}</span>
+          <i class="fas fa-chevron-down" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease;"></i>
+        </div>
+        <div class="custom-sem-submenu" style="display: none; flex-direction: column; gap: 4px; margin-top: 8px; width: 100%; padding-left: 12px; box-sizing: border-box;">
+          ${semesters.map(s => `
+            <button type="button" class="sem-opt-btn" data-year="${y.yearNumber}" data-sem="${s.semNumber}" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border); border-radius: var(--border-radius-sm); color: var(--text-main); padding: 6px 12px; font-size: 0.82rem; text-align: left; width: 100%; cursor: pointer; transition: all 0.2s ease;">
+              ${s.name}
+            </button>
+          `).join('')}
+        </div>
+      `;
+      
+      const showSubmenu = () => {
+        const submenu = item.querySelector('.custom-sem-submenu');
+        const arrow = item.querySelector('.fa-chevron-down');
+        if (submenu) submenu.style.display = 'flex';
+        if (arrow) arrow.style.transform = 'rotate(180deg)';
+        item.style.background = 'rgba(20, 184, 166, 0.05)';
+      };
+      
+      const hideSubmenu = () => {
+        const submenu = item.querySelector('.custom-sem-submenu');
+        const arrow = item.querySelector('.fa-chevron-down');
+        if (submenu) submenu.style.display = 'none';
+        if (arrow) arrow.style.transform = '';
+        item.style.background = '';
+      };
+      
+      item.addEventListener('mouseenter', showSubmenu);
+      item.addEventListener('mouseleave', hideSubmenu);
+      
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.sem-opt-btn')) return;
+        const submenu = item.querySelector('.custom-sem-submenu');
+        const isVisible = submenu && submenu.style.display === 'flex';
+        if (isVisible) {
+          hideSubmenu();
+        } else {
+          showSubmenu();
+        }
+      });
+      
+      menuEl.appendChild(item);
+    });
+
+    // Add click and hover listeners to semester buttons
+    menuEl.querySelectorAll('.sem-opt-btn').forEach(btn => {
+      btn.addEventListener('mouseenter', (e) => {
+        e.stopPropagation();
+        btn.style.background = 'var(--primary-gradient)';
+        btn.style.color = '#fff';
+      });
+      btn.addEventListener('mouseleave', (e) => {
+        e.stopPropagation();
+        btn.style.background = 'rgba(255, 255, 255, 0.05)';
+        btn.style.color = 'var(--text-main)';
+      });
+      
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const yearVal = btn.getAttribute('data-year');
+        const semVal = btn.getAttribute('data-sem');
+        
+        // Update hidden native selects
+        const yearSelect = document.getElementById('sub-year-filter');
+        const semSelect = document.getElementById('sub-sem-filter');
+        if (yearSelect) {
+          yearSelect.value = yearVal;
+          yearSelect.dispatchEvent(new Event('change'));
+        }
+        if (semSelect) {
+          semSelect.value = semVal;
+          semSelect.dispatchEvent(new Event('change'));
+        }
+        
+        // Update trigger button text
+        const yearObj = academicYears.find(y => String(y.yearNumber) === String(yearVal));
+        const yearName = yearObj ? yearObj.name : `${yearVal} Year`;
+        const triggerLabel = document.getElementById('custom-sub-trigger-label');
+        if (triggerLabel) {
+          triggerLabel.innerText = `${yearName} - Sem ${semVal}`;
+          triggerLabel.style.color = 'var(--text-main)';
+        }
+        
+        // Hide dropdown
+        const dropdownMenu = document.getElementById('custom-sub-year-menu');
+        if (dropdownMenu) dropdownMenu.style.display = 'none';
+      });
+    });
+  }
+
   function renderPreferencesTable() {
     const tbody = document.getElementById('preferences-table-body');
     if (!tbody) return;
@@ -309,7 +531,10 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Group the faculty's preferences by year
       const yearGroups = {};
-      prefsList.forEach((p, index) => {
+      const normalPrefs = prefsList.filter(p => p.mock !== true);
+      const mockPrefs = prefsList.filter(p => p.mock === true);
+
+      normalPrefs.forEach((p, index) => {
         const sub = data.subjectsMap[p.subjectId];
         if (sub) {
           const yr = sub.year;
@@ -318,7 +543,23 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           yearGroups[yr].push({
             sub,
-            choiceNum: index + 1
+            choiceNum: index + 1,
+            isMock: false
+          });
+        }
+      });
+
+      mockPrefs.forEach(p => {
+        const sub = data.subjectsMap[p.subjectId];
+        if (sub) {
+          const yr = sub.year;
+          if (!yearGroups[yr]) {
+            yearGroups[yr] = [];
+          }
+          yearGroups[yr].push({
+            sub,
+            choiceNum: 'M',
+            isMock: true
           });
         }
       });
@@ -332,17 +573,35 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         selectedYears.forEach(yr => {
           const choices = yearGroups[yr];
-          const choicesHtml = choices.map(c => `
-            <div class="preference-badge" style="background: rgba(20, 184, 166, 0.08); border: 1px solid rgba(20, 184, 166, 0.2); border-radius: 4px; padding: 4px 10px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; margin-bottom: 4px;">
-              <span style="font-weight: 700; color: var(--secondary); background: rgba(20, 184, 166, 0.15); border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem;">${c.choiceNum}</span>
-              <span style="color: var(--text-main);">${c.sub.name} <code style="color: var(--text-muted); font-size: 0.78rem;">(${c.sub.id})</code></span>
-            </div>
-          `).join('');
+          
+          // Chunk choices into groups of 3
+          const chunks = [];
+          for (let i = 0; i < choices.length; i += 3) {
+            chunks.push(choices.slice(i, i + 3));
+          }
+
+          const chunksHtml = chunks.map(chunk => {
+            const rowHtml = chunk.map(c => {
+              const isMock = c.isMock === true;
+              const badgeBg = isMock ? 'rgba(99, 102, 241, 0.08)' : 'rgba(20, 184, 166, 0.08)';
+              const badgeBorder = isMock ? 'rgba(99, 102, 241, 0.2)' : 'rgba(20, 184, 166, 0.2)';
+              const numBg = isMock ? 'rgba(99, 102, 241, 0.15)' : 'rgba(20, 184, 166, 0.15)';
+              const numColor = isMock ? 'var(--primary)' : 'var(--secondary)';
+              const mockLabel = isMock ? ' (Mock)' : '';
+              return `
+                <div class="preference-badge" style="background: ${badgeBg}; border: 1px solid ${badgeBorder}; border-radius: 4px; padding: 4px 10px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; margin-bottom: 4px; box-sizing: border-box; max-width: calc(33.33% - 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  <span style="font-weight: 700; color: ${numColor}; background: ${numBg}; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; flex-shrink: 0;">${c.choiceNum}</span>
+                  <span style="color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.sub.name} <code style="color: var(--text-muted); font-size: 0.78rem;">(${c.sub.id})${mockLabel}</code></span>
+                </div>
+              `;
+            }).join('');
+            return `<div style="display: flex; flex-wrap: nowrap; gap: 8px; width: 100%; align-items: center; margin-bottom: 4px;">${rowHtml}</div>`;
+          }).join('');
 
           prefHtml += `
-            <div style="display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.03); padding-bottom: 6px; margin-bottom: 2px;">
-              <span style="font-weight: 600; min-width: 60px; color: var(--secondary); font-size: 0.85rem; padding-top: 4px;">Year ${yr}:</span>
-              <div style="display: flex; flex-wrap: wrap; flex-grow: 1; align-items: center;">${choicesHtml}</div>
+            <div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.03); padding-bottom: 6px; margin-bottom: 2px; width: 100%;">
+              <span style="font-weight: 600; color: var(--secondary); font-size: 0.85rem; margin-bottom: 4px;">Year ${yr}:</span>
+              <div style="width: 100%; display: flex; flex-direction: column; gap: 4px;">${chunksHtml}</div>
             </div>
           `;
         });
@@ -456,12 +715,29 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadConfigOptions();
       }
       populateFilterDropdowns();
+      populateCustomSubDropdown();
       renderSubjectTable(subjectList);
     } catch (error) {
       showToast('Load Error', 'Could not fetch subjects', 'error');
       tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--error);">Failed to load subjects</td></tr>`;
     }
   }
+
+  window.switchSubjectView = function(type) {
+    currentSubjectViewType = type;
+    const btnRegular = document.getElementById('btn-view-regular');
+    const btnMock = document.getElementById('btn-view-mock');
+    if (btnRegular && btnMock) {
+      if (type === 'regular') {
+        btnRegular.className = 'btn btn-primary';
+        btnMock.className = 'btn btn-ghost';
+      } else {
+        btnRegular.className = 'btn btn-ghost';
+        btnMock.className = 'btn btn-primary';
+      }
+    }
+    renderSubjectTable(subjectList);
+  };
 
   function renderSubjectTable(list) {
     const tbody = document.getElementById('subject-table-body');
@@ -476,7 +752,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    let filteredList = list.filter(s => 
+    // Filter by view type (regular vs mock)
+    let filteredList = list.filter(s => {
+      const isSubMock = s.mock === true;
+      const isTargetMock = currentSubjectViewType === 'mock';
+      return isSubMock === isTargetMock;
+    });
+
+    filteredList = filteredList.filter(s => 
       getSubjectDeptCode(s) === deptVal.toUpperCase() &&
       Number(s.year) === Number(yearVal) &&
       Number(s.sem) === Number(semVal)
@@ -567,11 +850,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const title = document.getElementById('subject-modal-title');
     const btn = document.getElementById('subject-modal-btn');
     const mode = document.getElementById('subject-modal-mode');
-        const idInput = document.getElementById('sub-id');
+    const oldIdInput = document.getElementById('subject-modal-old-id');
+    const idInput = document.getElementById('sub-id');
     const nameInput = document.getElementById('sub-name');
     const deptSelect = document.getElementById('sub-dept');
     const yearSelect = document.getElementById('sub-year');
     const semSelect = document.getElementById('sub-sem');
+    const typeSelect = document.getElementById('sub-type');
     const regInput = document.getElementById('sub-regulation');
     const academicYearInput = document.getElementById('sub-academic-year');
 
@@ -588,21 +873,25 @@ document.addEventListener('DOMContentLoaded', () => {
       const sub = subjectList.find(s => s.id === subId);
       if (sub) {
         mode.value = 'edit';
+        oldIdInput.value = sub.id;
         title.innerText = 'Edit Subject';
         btn.innerText = 'Update Subject';
         idInput.value = sub.id;
-        idInput.disabled = true; // Can't edit code
+        idInput.disabled = false; // Code is editable now!
         nameInput.value = sub.name;
         deptSelect.value = sub.dep;
         yearSelect.value = sub.year;
         semSelect.value = sub.sem;
+        typeSelect.value = sub.mock ? 'mock' : 'regular';
         regInput.value = sub.regulation;
         academicYearInput.value = sub.academicYear || '';
       }
     } else {
       mode.value = 'add';
+      oldIdInput.value = '';
       title.innerText = 'Add Subject';
       btn.innerText = 'Add Subject';
+      typeSelect.value = currentSubjectViewType; // Default type to current tab view
     }
 
     modal.classList.add('active');
@@ -620,6 +909,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('subject-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const mode = document.getElementById('subject-modal-mode').value;
+    const oldId = document.getElementById('subject-modal-old-id').value;
     
     const subjectData = {
       id: document.getElementById('sub-id').value.trim(),
@@ -628,7 +918,8 @@ document.addEventListener('DOMContentLoaded', () => {
       year: parseInt(document.getElementById('sub-year').value),
       sem: parseInt(document.getElementById('sub-sem').value),
       regulation: document.getElementById('sub-regulation').value.trim(),
-      academicYear: document.getElementById('sub-academic-year').value.trim()
+      academicYear: document.getElementById('sub-academic-year').value.trim(),
+      mock: document.getElementById('sub-type').value === 'mock'
     };
 
     try {
@@ -639,7 +930,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         showToast('Subject Added', 'New subject added to directory', 'success');
       } else {
-        await apiRequest(`/subject/update/${subjectData.id}`, {
+        await apiRequest(`/subject/update/${encodeURIComponent(oldId)}`, {
           method: 'PUT',
           body: subjectData
         });
@@ -1020,12 +1311,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const sem = document.getElementById('deadline-sem').value;
     const yearVal = document.getElementById('deadline-year').value.trim();
     const dept = document.getElementById('deadline-dept').value;
+    const classYear = document.getElementById('deadline-class-year').value;
     const previewContainer = document.getElementById('deadline-subjects-preview');
 
     if (!previewContainer) return;
 
-    if (!sem || !yearVal || !dept) {
-      previewContainer.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">Select Department, Active Semester, and enter Academic Year above to preview subjects list.</p>';
+    if (!sem || !yearVal || !dept || !classYear) {
+      previewContainer.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">Select Department, Active Semester, Active Year, and enter Academic Year above to preview subjects list.</p>';
       return;
     }
 
@@ -1037,6 +1329,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const filtered = subjectList.filter(s => 
         Number(s.sem) === Number(sem) &&
+        Number(s.year) === Number(classYear) &&
         s.academicYear && s.academicYear.toLowerCase() === yearVal.toLowerCase() &&
         getSubjectDeptCode(s) === dept.toUpperCase()
       );
@@ -1109,6 +1402,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('deadline-sem').addEventListener('change', updateSubjectsPreview);
   document.getElementById('deadline-year').addEventListener('input', updateSubjectsPreview);
   document.getElementById('deadline-dept').addEventListener('change', updateSubjectsPreview);
+  document.getElementById('deadline-class-year').addEventListener('change', updateSubjectsPreview);
 
   async function loadDeadlineStatus() {
     const statusContainer = document.getElementById('deadline-status-container');
@@ -1133,9 +1427,35 @@ document.addEventListener('DOMContentLoaded', () => {
       if (diffMs <= 0) {
         statusContainer.innerHTML = `
           <div class="status-badge expired"><i class="fas fa-history"></i> EXPIRED</div>
-          <p style="margin-top: 12px; font-size: 0.95rem; font-weight: 600;">Target Semester:</p>
-          <h5 style="color: var(--text-muted); margin-top: 4px; margin-bottom: 12px;">Semester ${selectionWindow.sem || 'N/A'}</h5>
-          <p style="font-size: 0.95rem; font-weight: 500;">Deadline Passed on:</p>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 12px; font-size: 0.88rem; border-bottom: 1px solid var(--panel-border); padding-bottom: 12px;">
+            <div>
+              <span style="color: var(--text-muted);">Active Year:</span>
+              <strong style="color: var(--text-muted); margin-left: 4px;">Year ${selectionWindow.year || 'N/A'}</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted);">Semester:</span>
+              <strong style="color: var(--text-muted); margin-left: 4px;">Sem ${selectionWindow.sem || 'N/A'}</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted);">Max Regular:</span>
+              <strong style="color: var(--text-muted); margin-left: 4px;">${selectionWindow.maxRegularPreferences || 'N/A'}</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted);">Max Mock:</span>
+              <strong style="color: var(--text-muted); margin-left: 4px;">${selectionWindow.maxMockPreferences || 'N/A'}</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted);">Hours Limit:</span>
+              <strong style="color: var(--text-muted); margin-left: 4px;">${selectionWindow.hoursPerWeek || 'N/A'}h</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted);">Subject Hours:</span>
+              <strong style="color: var(--text-muted); margin-left: 4px;">${selectionWindow.subjectHoursPerWeek || 'N/A'}h</strong>
+            </div>
+          </div>
+
+          <p style="font-size: 0.95rem; font-weight: 500; margin-top: 12px;">Deadline Passed on:</p>
           <p style="font-size: 0.85rem; color: var(--text-muted);">${deadlineTime.toLocaleString()}</p>
           <p style="margin-top: 10px; font-size: 0.88rem; font-style: italic; color: var(--secondary); border-top: 1px solid var(--panel-border); padding-top: 10px;">"${selectionWindow.message}"</p>
         `;
@@ -1146,9 +1466,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
         statusContainer.innerHTML = `
           <div class="status-badge active"><i class="fas fa-hourglass-half"></i> RUNNING</div>
-          <p style="margin-top: 12px; font-size: 0.95rem; font-weight: 600;">Target Semester:</p>
-          <h5 style="color: var(--secondary); margin-top: 4px; margin-bottom: 12px;">Semester ${selectionWindow.sem}</h5>
-          <p style="font-size: 0.95rem; font-weight: 600;">Time Remaining:</p>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 12px; font-size: 0.88rem; border-bottom: 1px solid var(--panel-border); padding-bottom: 12px;">
+            <div>
+              <span style="color: var(--text-muted);">Active Year:</span>
+              <strong style="color: var(--secondary); margin-left: 4px;">Year ${selectionWindow.year}</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted);">Semester:</span>
+              <strong style="color: var(--secondary); margin-left: 4px;">Sem ${selectionWindow.sem}</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted);">Max Regular:</span>
+              <strong style="color: var(--secondary); margin-left: 4px;">${selectionWindow.maxRegularPreferences || 'N/A'}</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted);">Max Mock:</span>
+              <strong style="color: var(--secondary); margin-left: 4px;">${selectionWindow.maxMockPreferences || 'N/A'}</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted);">Hours Limit:</span>
+              <strong style="color: var(--secondary); margin-left: 4px;">${selectionWindow.hoursPerWeek || 'N/A'}h</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted);">Subject Hours:</span>
+              <strong style="color: var(--secondary); margin-left: 4px;">${selectionWindow.subjectHoursPerWeek || 'N/A'}h</strong>
+            </div>
+          </div>
+
+          <p style="font-size: 0.95rem; font-weight: 600; margin-top: 12px;">Time Remaining:</p>
           <h4 style="color: var(--secondary); font-size: 1.5rem; margin-top: 4px; font-weight: 700;">
             ${days}d ${hours}h ${mins}m
           </h4>
@@ -1168,6 +1514,24 @@ document.addEventListener('DOMContentLoaded', () => {
       if (selectionWindow.department) {
         document.getElementById('deadline-dept').value = selectionWindow.department;
       }
+      if (selectionWindow.year) {
+        document.getElementById('deadline-class-year').value = selectionWindow.year;
+      }
+      if (selectionWindow.hoursPerWeek) {
+        document.getElementById('deadline-hours-per-week').value = selectionWindow.hoursPerWeek;
+      }
+      if (selectionWindow.maxSubjectsAllocated) {
+        document.getElementById('deadline-max-subjects').value = selectionWindow.maxSubjectsAllocated;
+      }
+      if (selectionWindow.subjectHoursPerWeek) {
+        document.getElementById('deadline-subject-hours').value = selectionWindow.subjectHoursPerWeek;
+      }
+      if (selectionWindow.maxRegularPreferences) {
+        document.getElementById('deadline-max-regular-pref').value = selectionWindow.maxRegularPreferences;
+      }
+      if (selectionWindow.maxMockPreferences) {
+        document.getElementById('deadline-max-mock-pref').value = selectionWindow.maxMockPreferences;
+      }
 
       updateSubjectsPreview();
 
@@ -1183,6 +1547,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const sem = parseInt(document.getElementById('deadline-sem').value);
     const academicYear = document.getElementById('deadline-year').value.trim();
     const department = document.getElementById('deadline-dept').value;
+    const year = parseInt(document.getElementById('deadline-class-year').value);
+    const hoursPerWeek = parseInt(document.getElementById('deadline-hours-per-week').value);
+    const maxSubjectsAllocated = parseInt(document.getElementById('deadline-max-subjects').value);
+    const subjectHoursPerWeek = parseInt(document.getElementById('deadline-subject-hours').value);
+    const maxRegularPreferences = parseInt(document.getElementById('deadline-max-regular-pref').value);
+    const maxMockPreferences = parseInt(document.getElementById('deadline-max-mock-pref').value);
 
     try {
       const params = new URLSearchParams();
@@ -1191,6 +1561,12 @@ document.addEventListener('DOMContentLoaded', () => {
       params.append('sem', sem);
       params.append('academicYear', academicYear);
       params.append('department', department);
+      params.append('year', year);
+      params.append('hoursPerWeek', hoursPerWeek);
+      params.append('maxSubjectsAllocated', maxSubjectsAllocated);
+      params.append('subjectHoursPerWeek', subjectHoursPerWeek);
+      params.append('maxRegularPreferences', maxRegularPreferences);
+      params.append('maxMockPreferences', maxMockPreferences);
 
       await apiRequest('/adminfaculty/deadline', {
         method: 'POST',
@@ -1340,7 +1716,11 @@ document.addEventListener('DOMContentLoaded', () => {
       preferences.forEach(p => {
         const li = document.createElement('li');
         const subName = subjectsMap[p.subjectId] || 'Unknown Subject';
-        li.innerText = `${p.subjectId} - ${subName}`;
+        const isMock = p.mock === true;
+        li.innerText = `${p.subjectId} - ${subName}${isMock ? ' (Mock)' : ''}`;
+        if (isMock) {
+          li.style.color = 'var(--primary)';
+        }
         prefList.appendChild(li);
       });
 
@@ -1421,23 +1801,32 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = `<tr><td colspan="3" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>`;
 
     try {
-      const allocations = await apiRequest('/adminfaculty/allocations');
-      const allocList = Array.isArray(allocations) ? allocations : [];
-      if (allocList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No subject allocations.</td></tr>`;
-        return;
-      }
+      const [allocations, sectionAllocs, faculty, subjects] = await Promise.all([
+        apiRequest('/adminfaculty/allocations'),
+        apiRequest('/adminfaculty/section-allocations'),
+        apiRequest('/adminfaculty/viewfaculty'),
+        apiRequest('/subject/viewAll')
+      ]);
 
-      const faculty = await apiRequest('/adminfaculty/viewfaculty');
-      const subjects = await apiRequest('/subject/viewAll');
+      const allocList = Array.isArray(allocations) ? allocations : [];
+      const secList = Array.isArray(sectionAllocs) ? sectionAllocs : [];
+      const facList = Array.isArray(faculty) ? faculty : [];
+      const subList = Array.isArray(subjects) ? subjects : [];
 
       const facultyMap = {};
-      const facList = Array.isArray(faculty) ? faculty : [];
       facList.forEach(f => facultyMap[f.id] = f.name);
-      
+
       const subjectsMap = {};
-      const subList = Array.isArray(subjects) ? subjects : [];
       subList.forEach(s => subjectsMap[s.id] = s);
+
+      const sectionMap = {};
+      secList.forEach(sa => {
+        const key = sa.facultyId.toUpperCase() + "_" + sa.subjectId.toUpperCase();
+        if (!sectionMap[key]) {
+          sectionMap[key] = [];
+        }
+        sectionMap[key].push(sa.sectionName);
+      });
 
       tbody.innerHTML = '';
       const validAllocList = allocList.filter(alloc => facultyMap[alloc.facultyId]);
@@ -1449,16 +1838,46 @@ document.addEventListener('DOMContentLoaded', () => {
         const sub = subjectsMap[alloc.subjectId] || { name: 'Unknown Subject' };
         const facName = facultyMap[alloc.facultyId];
         
+        const secKey = alloc.facultyId.toUpperCase() + "_" + alloc.subjectId.toUpperCase();
+        const secs = sectionMap[secKey] || [];
+        const secLabel = secs.length > 0 ? secs.map(s => `<span class="badge badge-admin" style="margin-left: 6px;">Sec ${s}</span>`).join('') : '<span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 6px;">(No Section)</span>';
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>${alloc.facultyId}</strong><br><span style="font-size: 0.85rem; color: var(--text-muted);">${facName}</span></td>
-          <td><strong>${alloc.subjectId}</strong><br><span style="font-size: 0.85rem; color: var(--text-muted);">${sub.name}</span></td>
+          <td><strong>${alloc.subjectId}</strong>${secLabel}<br><span style="font-size: 0.85rem; color: var(--text-muted);">${sub.name}</span></td>
           <td style="text-align: right;">
             <button type="button" class="action-btn action-btn-delete" onclick="deleteSubjectAllocation(${alloc.id})" title="Remove"><i class="fas fa-trash-alt"></i></button>
           </td>
         `;
         tbody.appendChild(tr);
       });
+
+      // Render unallocated faculty
+      const unallocatedTbody = document.getElementById('unallocated-faculty-table-body');
+      if (unallocatedTbody) {
+        const allocatedIds = new Set(allocList.map(a => a.facultyId.toUpperCase()));
+        const unallocatedFaculties = facList.filter(f => {
+          const isSuper = f.role && f.role.toUpperCase() === 'SUPERADMIN';
+          const isNotAllocated = !allocatedIds.has(f.id.toUpperCase());
+          return !isSuper && isNotAllocated;
+        });
+
+        if (unallocatedFaculties.length === 0) {
+          unallocatedTbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">All faculty members have allocations.</td></tr>`;
+        } else {
+          unallocatedTbody.innerHTML = '';
+          unallocatedFaculties.forEach(f => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td><strong>${f.id}</strong></td>
+              <td>${f.name}</td>
+              <td>${f.email || 'N/A'}</td>
+            `;
+            unallocatedTbody.appendChild(tr);
+          });
+        }
+      }
     } catch (error) {
       tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--error);">Failed to load subject allocations</td></tr>`;
     }
@@ -1854,6 +2273,53 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.removeChild(link);
     showToast('Export Success', 'Excel spreadsheet downloaded successfully', 'success');
   };
+
+  // Custom dropdown trigger for selections dept/sem filter
+  const customPrefDropdown = document.getElementById('custom-pref-dept-dropdown');
+  if (customPrefDropdown) {
+    const triggerBtn = customPrefDropdown.querySelector('.custom-dropdown-trigger');
+    const menuEl = customPrefDropdown.querySelector('.custom-dropdown-menu');
+    
+    if (triggerBtn && menuEl) {
+      triggerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isVisible = menuEl.style.display === 'block';
+        menuEl.style.display = isVisible ? 'none' : 'block';
+      });
+      
+      document.addEventListener('click', () => {
+        menuEl.style.display = 'none';
+      });
+    }
+  }
+
+  // Custom dropdown trigger for subject directory year/sem filter
+  const customSubDropdown = document.getElementById('custom-sub-year-dropdown');
+  if (customSubDropdown) {
+    const triggerBtn = customSubDropdown.querySelector('.custom-dropdown-trigger');
+    const menuEl = customSubDropdown.querySelector('.custom-dropdown-menu');
+    
+    if (triggerBtn && menuEl) {
+      triggerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isVisible = menuEl.style.display === 'block';
+        menuEl.style.display = isVisible ? 'none' : 'block';
+      });
+      
+      document.addEventListener('click', () => {
+        menuEl.style.display = 'none';
+      });
+    }
+  }
+
+  // Subject category selection query change handler
+  const categoryFilter = document.getElementById('sub-category-filter');
+  if (categoryFilter) {
+    categoryFilter.addEventListener('change', (e) => {
+      currentSubjectViewType = e.target.value;
+      renderSubjectTable(subjectList);
+    });
+  }
 
   // Initial load on startup
   loadFacultySelections();

@@ -59,6 +59,9 @@ public class SubjectService {
     private AllocationHistoryRepository allocationHistoryRepository;
 
     @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
+    @Autowired
     private SectionRepository sectionRepository;
 
     @Autowired
@@ -82,6 +85,27 @@ public class SubjectService {
             return null;
         }
 
+        String newId = updatedSubject.getId();
+        if (newId != null && !newId.trim().isEmpty() && !newId.equalsIgnoreCase(id)) {
+            newId = newId.trim();
+            // Check if another subject already exists with the new ID
+            if (subjectRepository.existsById(newId)) {
+                throw new IllegalArgumentException("Already there is a subject with that subjectcode");
+            }
+            
+            // Delete the old subject record
+            subjectRepository.delete(subject);
+            
+            // Set the new ID on the entity
+            subject.setId(newId);
+            
+            // Update referencing tables using jdbcTemplate
+            jdbcTemplate.update("UPDATE allocation_history SET subject_id = ? WHERE subject_id = ?", newId, id);
+            jdbcTemplate.update("UPDATE faculty_subject_preference SET subject_id = ? WHERE subject_id = ?", newId, id);
+            jdbcTemplate.update("UPDATE section_allocation SET subject_id = ? WHERE subject_id = ?", newId, id);
+            jdbcTemplate.update("UPDATE subject_allocation SET subject_id = ? WHERE subject_id = ?", newId, id);
+        }
+
         if (updatedSubject.getName() != null)
             subject.setName(updatedSubject.getName());
 
@@ -99,6 +123,8 @@ public class SubjectService {
 
         if (updatedSubject.getAcademicYear() != null)
             subject.setAcademicYear(updatedSubject.getAcademicYear());
+
+        subject.setMock(updatedSubject.isMock());
 
         return subjectRepository.save(subject);
     }
@@ -137,6 +163,17 @@ public class SubjectService {
                     subject.setAcademicYear("2026-27");
                 }
 
+                if (row.getLastCellNum() > 7 && row.getCell(7) != null) {
+                    String typeVal = getCellValueAsString(row.getCell(7)).trim();
+                    boolean isMockVal = "mock".equalsIgnoreCase(typeVal) || 
+                                       "yes".equalsIgnoreCase(typeVal) || 
+                                       "true".equalsIgnoreCase(typeVal) || 
+                                       "1".equals(typeVal);
+                    subject.setMock(isMockVal);
+                } else {
+                    subject.setMock(false);
+                }
+
                 subjectRepository.save(subject);
             }
             workbook.close();
@@ -161,6 +198,17 @@ public class SubjectService {
         }
     }
 
+    @Transactional
+    public void savePreferencesEntity(String facultyId, List<FacultySubjectPreference> preferences) {
+        // Clear existing preferences first
+        preferenceRepository.deleteByFacultyId(facultyId);
+
+        // Save new preferences
+        for (FacultySubjectPreference pref : preferences) {
+            preferenceRepository.save(pref);
+        }
+    }
+
     public List<FacultySubjectPreference> getPreferencesByFacultyId(String facultyId) {
         return preferenceRepository.findByFacultyIdOrderByIdAsc(facultyId);
     }
@@ -169,7 +217,14 @@ public class SubjectService {
     // SUBJECT SELECTION DEADLINE WINDOW
     // ----------------------------------------------------
 
-    public SubjectSelectionWindow setDeadline(String message, int days, Integer sem, String academicYear, String department) {
+    public SubjectSelectionWindow setDeadline(
+            String message, int days, Integer sem, String academicYear, String department,
+            Integer year, Integer hoursPerWeek, Integer maxSubjectsAllocated,
+            Integer subjectHoursPerWeek, Integer maxRegularPreferences, Integer maxMockPreferences) {
+            
+        // Refresh preferences table when setting a new selection window
+        preferenceRepository.deleteAll();
+
         SubjectSelectionWindow window = windowRepository.findTopByOrderByIdDesc();
         if (window == null) {
             window = new SubjectSelectionWindow();
@@ -180,6 +235,12 @@ public class SubjectService {
         window.setSem(sem);
         window.setAcademicYear(academicYear);
         window.setDepartment(department);
+        window.setYear(year);
+        window.setHoursPerWeek(hoursPerWeek);
+        window.setMaxSubjectsAllocated(maxSubjectsAllocated);
+        window.setSubjectHoursPerWeek(subjectHoursPerWeek);
+        window.setMaxRegularPreferences(maxRegularPreferences);
+        window.setMaxMockPreferences(maxMockPreferences);
         return windowRepository.save(window);
     }
 
@@ -231,6 +292,53 @@ public class SubjectService {
         Subject subject = subjectRepository.findById(allocation.getSubjectId()).orElse(null);
         if (subject == null) {
             throw new IllegalArgumentException("Subject not found.");
+        }
+
+        // Validate selection window limits (max subjects and hours)
+        SubjectSelectionWindow window = windowRepository.findTopByOrderByIdDesc();
+        if (window != null) {
+            List<SubjectAllocation> facAllocs = allocationRepository.findByFacultyId(allocation.getFacultyId());
+            
+            Integer maxSubs = window.getMaxSubjectsAllocated();
+            if (maxSubs != null && maxSubs > 0 && facAllocs.size() >= maxSubs) {
+                throw new IllegalArgumentException("Maximum subjects allocation limit reached (" + maxSubs + " subject(s)) for this faculty member.");
+            }
+
+            Integer maxHours = window.getHoursPerWeek();
+            Integer subHours = window.getSubjectHoursPerWeek();
+            if (maxHours != null && maxHours > 0 && subHours != null && subHours > 0) {
+                int currentHours = facAllocs.size() * subHours;
+                if (currentHours + subHours > maxHours) {
+                    throw new IllegalArgumentException("Maximum weekly workload hours reached (" + maxHours + " hours) for this faculty member. Current: " + currentHours + " hrs, Requested: " + subHours + " hrs.");
+                }
+            }
+
+            // Enforce max 2 regular subjects rule
+            if (!subject.isMock()) {
+                long regularCount = facAllocs.stream()
+                        .map(a -> subjectRepository.findById(a.getSubjectId()).orElse(null))
+                        .filter(s -> s != null && !s.isMock())
+                        .count();
+                if (regularCount >= 2) {
+                    throw new IllegalArgumentException("Faculty member has already been allocated " + regularCount + " regular subjects. Maximum allowed is 2. Additional allocations must be mock.");
+                }
+            }
+
+            // Enforce: If total allocated subjects >= 3, they cannot all be from the same study year
+            List<Integer> years = new java.util.ArrayList<>();
+            for (SubjectAllocation a : facAllocs) {
+                Subject s = subjectRepository.findById(a.getSubjectId()).orElse(null);
+                if (s != null) {
+                    years.add(s.getYear());
+                }
+            }
+            years.add(subject.getYear());
+            if (years.size() >= 3) {
+                long distinctYearsCount = years.stream().distinct().count();
+                if (distinctYearsCount == 1) {
+                    throw new IllegalArgumentException("All allocated subjects cannot be from the same study year (" + subject.getYear() + "). Allocation must span at least two different years.");
+                }
+            }
         }
 
         String subDeptCode = getSubjectDepartmentCode(subject);
@@ -326,11 +434,26 @@ public class SubjectService {
         if (window != null) {
             List<Subject> filtered = allSubjects.stream()
                 .filter(s -> (window.getSem() == null || NumberHelperIsEqual(s.getSem(), window.getSem())) &&
-                             (window.getDepartment() == null || window.getDepartment().equalsIgnoreCase(getSubjectDepartmentCode(s))))
+                             (window.getYear() == null || NumberHelperIsEqual(s.getYear(), window.getYear())) &&
+                             (window.getDepartment() == null || window.getDepartment().equalsIgnoreCase(getSubjectDepartmentCode(s))) &&
+                             (window.getAcademicYear() == null || window.getAcademicYear().equalsIgnoreCase(s.getAcademicYear())))
                 .collect(Collectors.toList());
             if (!filtered.isEmpty()) {
                 subjects = filtered;
             }
+        }
+
+        // Clean out existing non-finalized allocations for the target subjects in this batch
+        for (Subject sub : subjects) {
+            List<SubjectAllocation> drafts = allocationRepository.findBySubjectId(sub.getId()).stream()
+                    .filter(sa -> !sa.isFinalized())
+                    .collect(Collectors.toList());
+            allocationRepository.deleteAll(drafts);
+
+            List<SectionAllocation> draftSecs = sectionAllocationRepository.findBySubjectId(sub.getId()).stream()
+                    .filter(sa -> !sa.isFinalized())
+                    .collect(Collectors.toList());
+            sectionAllocationRepository.deleteAll(draftSecs);
         }
 
         List<AdminFaculty> allFaculty = adminRepository.findAll().stream()
@@ -346,7 +469,16 @@ public class SubjectService {
                 .map(f -> f.getId().toUpperCase())
                 .collect(Collectors.toSet());
 
+        // Fetch all preferences (both regular and mock)
         List<FacultySubjectPreference> allPreferences = preferenceRepository.findAll();
+
+        // Sort preferences so regular preferences are processed first (mock = false < mock = true), then by ID (first come first served)
+        allPreferences.sort((p1, p2) -> {
+            if (p1.isMock() != p2.isMock()) {
+                return Boolean.compare(p1.isMock(), p2.isMock());
+            }
+            return Long.compare(p1.getId(), p2.getId());
+        });
 
         // Calculate the minimum preference ID for each faculty to determine first-come-first-serve order (case-insensitive keys)
         java.util.Map<String, Long> facultySubmissionOrder = new java.util.HashMap<>();
@@ -356,6 +488,35 @@ public class SubjectService {
             long prefId = pref.getId();
             if (!facultySubmissionOrder.containsKey(facId) || prefId < facultySubmissionOrder.get(facId)) {
                 facultySubmissionOrder.put(facId, prefId);
+            }
+        }
+
+        java.util.Map<String, Integer> facultySubjectCount = new java.util.HashMap<>();
+        java.util.Map<String, Integer> facultyRegularCount = new java.util.HashMap<>();
+        java.util.Map<String, Integer> facultyWorkloadHours = new java.util.HashMap<>();
+        java.util.Map<String, List<Integer>> facultyYears = new java.util.HashMap<>();
+        Integer subHours = (window != null) ? window.getSubjectHoursPerWeek() : null;
+        if (subHours == null) subHours = 4; // default fallback
+
+        // Seed tracker maps with existing finalized allocations
+        for (SubjectAllocation alloc : allocationRepository.findAll()) {
+            if (alloc.getFacultyId() == null) continue;
+            String facId = alloc.getFacultyId().toUpperCase();
+            
+            // Look up subject mock status
+            Subject s = subjectRepository.findById(alloc.getSubjectId()).orElse(null);
+            if (s != null) {
+                facultySubjectCount.put(facId, facultySubjectCount.getOrDefault(facId, 0) + 1);
+                facultyWorkloadHours.put(facId, facultyWorkloadHours.getOrDefault(facId, 0) + subHours);
+                if (!s.isMock()) {
+                    facultyRegularCount.put(facId, facultyRegularCount.getOrDefault(facId, 0) + 1);
+                }
+                List<Integer> years = facultyYears.get(facId);
+                if (years == null) {
+                    years = new ArrayList<>();
+                    facultyYears.put(facId, years);
+                }
+                years.add(s.getYear());
             }
         }
 
@@ -370,8 +531,10 @@ public class SubjectService {
                     .collect(Collectors.toList());
             int maxAllocations = Math.max(1, sections.size());
 
-            // Get existing subject allocations for this subject
-            List<SubjectAllocation> existingAllocations = allocationRepository.findBySubjectId(sub.getId());
+            // Get existing finalized allocations for this subject
+            List<SubjectAllocation> existingAllocations = allocationRepository.findBySubjectId(sub.getId()).stream()
+                    .filter(sa -> sa.isFinalized())
+                    .collect(Collectors.toList());
 
             int allocationsNeeded = maxAllocations - existingAllocations.size();
 
@@ -416,12 +579,106 @@ public class SubjectService {
                         continue;
                     }
 
+                    // Enforce selection window limits (max subjects and workload hours)
+                    if (window != null) {
+                        Integer maxSubs = window.getMaxSubjectsAllocated();
+                        if (maxSubs != null && maxSubs > 0) {
+                            int currentSubs = facultySubjectCount.getOrDefault(facultyIdUpper, 0);
+                            if (currentSubs >= maxSubs) {
+                                continue; // Skip: exceeds max subjects limit
+                            }
+                        }
+
+                        Integer maxHours = window.getHoursPerWeek();
+                        if (maxHours != null && maxHours > 0) {
+                            int currentHours = facultyWorkloadHours.getOrDefault(facultyIdUpper, 0);
+                            if (currentHours + subHours > maxHours) {
+                                continue; // Skip: exceeds max workload hours limit
+                            }
+                        }
+                    }
+
+                    // Enforce max 2 regular (theory) subjects rule
+                    if (!sub.isMock()) {
+                        int regCount = facultyRegularCount.getOrDefault(facultyIdUpper, 0);
+                        if (regCount >= 2) {
+                            continue; // Skip: exceeds 2 regular subjects limit. Additional subjects must be mock.
+                        }
+                    }
+
+                    // Enforce: If total allocated subjects >= 3, they cannot all be from the same study year
+                    List<Integer> years = facultyYears.get(facultyIdUpper);
+                    if (years == null) {
+                        years = new ArrayList<>();
+                    }
+                    List<Integer> nextYears = new ArrayList<>(years);
+                    nextYears.add(sub.getYear());
+                    if (nextYears.size() >= 3) {
+                        boolean allSameYear = nextYears.stream().distinct().count() == 1;
+                        if (allSameYear) {
+                            continue; // Skip: all subjects would be in the same year.
+                        }
+                    }
+
                     SubjectAllocation newAlloc = new SubjectAllocation(sub.getId(), pref.getFacultyId());
                     newAlloc.setFinalized(false);
                     SubjectAllocation saved = allocationRepository.save(newAlloc);
                     autoAllocations.add(saved);
                     allocatedFacultyForSub.add(facultyIdUpper);
+
+                    // Update tracker maps
+                    facultySubjectCount.put(facultyIdUpper, facultySubjectCount.getOrDefault(facultyIdUpper, 0) + 1);
+                    facultyWorkloadHours.put(facultyIdUpper, facultyWorkloadHours.getOrDefault(facultyIdUpper, 0) + subHours);
+                    if (!sub.isMock()) {
+                        facultyRegularCount.put(facultyIdUpper, facultyRegularCount.getOrDefault(facultyIdUpper, 0) + 1);
+                    }
+                    List<Integer> yearsList = facultyYears.get(facultyIdUpper);
+                    if (yearsList == null) {
+                        yearsList = new ArrayList<>();
+                        facultyYears.put(facultyIdUpper, yearsList);
+                    }
+                    yearsList.add(sub.getYear());
+
                     allocationsNeeded--;
+                }
+            }
+        }
+
+        // Perform Automatic Section Allocation for each subject in this window
+        for (Subject sub : subjects) {
+            String subDeptCode = getSubjectDepartmentCode(sub);
+            List<Section> sections = sectionRepository.findAll().stream()
+                    .filter(s -> s.getYearNumber() != null && s.getYearNumber().equals(sub.getYear()) &&
+                                 s.getDepartmentCode() != null && s.getDepartmentCode().equalsIgnoreCase(subDeptCode))
+                    .collect(Collectors.toList());
+            
+            // Get all faculty allocated to this subject (both finalized and newly auto-allocated draft ones)
+            List<SubjectAllocation> allocsForSub = allocationRepository.findBySubjectId(sub.getId());
+            List<String> allocatedFacIds = allocsForSub.stream()
+                    .map(a -> a.getFacultyId())
+                    .collect(Collectors.toList());
+
+            if (allocatedFacIds.isEmpty() || sections.isEmpty()) {
+                continue;
+            }
+
+            if (allocatedFacIds.size() == 1) {
+                // Allocate this single faculty to all sections
+                String facId = allocatedFacIds.get(0);
+                for (Section sec : sections) {
+                    SectionAllocation sa = new SectionAllocation(sub.getId(), facId, sec.getSectionName());
+                    sa.setFinalized(false);
+                    sectionAllocationRepository.save(sa);
+                }
+            } else {
+                // Distribute sections round-robin
+                for (int i = 0; i < sections.size(); i++) {
+                    Section sec = sections.get(i);
+                    String facId = allocatedFacIds.get(i % allocatedFacIds.size());
+                    
+                    SectionAllocation sa = new SectionAllocation(sub.getId(), facId, sec.getSectionName());
+                    sa.setFinalized(false);
+                    sectionAllocationRepository.save(sa);
                 }
             }
         }
@@ -528,7 +785,9 @@ public class SubjectService {
     }
 
     public List<FacultySubjectPreference> getAllPreferences() {
-        return preferenceRepository.findAll();
+        return preferenceRepository.findAll().stream()
+                .filter(p -> !p.isMock())
+                .collect(Collectors.toList());
     }
 
     public List<AdminFaculty> getFacultyWithNoPreferences() {

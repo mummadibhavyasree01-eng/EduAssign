@@ -93,20 +93,28 @@
               </div>
             </div>
             
-            <div class="filter-row" style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
-              <div>
-                <input type="text" id="pref-academic-year-input" class="form-control" placeholder="Enter Academic Year (e.g. 2026-27)">
+            <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 500px;">
+              <div style="flex: 1; max-width: 220px;">
+                <input type="text" id="pref-academic-year-input" class="form-control" placeholder="Academic Year (e.g. 2026-27)" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
               </div>
-              <div>
-                <select id="pref-dept-filter" class="form-control">
-                  <option value="" disabled selected>Select Department</option>
-                </select>
+              <div style="flex: 1; max-width: 220px; position: relative;">
+                <div id="custom-pref-dept-dropdown" class="custom-dropdown" style="width: 100%;">
+                  <div class="custom-dropdown-trigger" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+                    <span id="custom-pref-trigger-label" style="color: var(--text-muted);">Select Dept & Sem</span>
+                    <i class="fas fa-chevron-down" style="font-size: 0.8rem; color: var(--text-muted);"></i>
+                  </div>
+                  <div id="custom-pref-dept-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+                    <!-- Populated dynamically via JS -->
+                  </div>
+                </div>
               </div>
-              <div>
-                <select id="pref-sem-filter" class="form-control">
-                  <option value="" disabled selected>Select Semester</option>
-                </select>
-              </div>
+              <!-- Hidden native selects to retain full compatibility -->
+              <select id="pref-dept-filter" style="display: none;">
+                <option value="" disabled selected>Select Department</option>
+              </select>
+              <select id="pref-sem-filter" style="display: none;">
+                <option value="" disabled selected>Select Semester</option>
+              </select>
             </div>
 
             <div class="table-responsive">
@@ -157,7 +165,7 @@
                 <h3>Subject List</h3>
                 <p>Manage curriculum subjects, regulation, and departments</p>
               </div>
-              <div class="action-buttons">
+              <div class="action-buttons" style="display: flex; gap: 8px; align-items: center;">
                 <button class="btn btn-primary" onclick="openSubjectModal()"><i class="fas fa-plus"></i> Add Subject</button>
               </div>
             </div>
@@ -167,22 +175,36 @@
               <input type="text" id="subject-search" class="form-control" placeholder="Search subjects by code, name, department...">
             </div>
 
-            <div class="filter-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
-              <div>
-                <select id="sub-dept-filter" class="form-control">
-                  <option value="" disabled selected>Select Department</option>
+            <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 600px;">
+              <div style="flex: 1; max-width: 130px;">
+                <select id="sub-category-filter" class="form-control" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px;">
+                  <option value="regular" selected>Regular</option>
+                  <option value="mock">Mock</option>
                 </select>
               </div>
-              <div>
-                <select id="sub-year-filter" class="form-control">
-                  <option value="" disabled selected>Select Academic Year</option>
+              <div style="flex: 1; max-width: 180px;">
+                <select id="sub-dept-filter" class="form-control" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px;">
+                  <option value="" disabled selected>Select Dept</option>
                 </select>
               </div>
-              <div>
-                <select id="sub-sem-filter" class="form-control">
-                  <option value="" disabled selected>Select Semester</option>
-                </select>
+              <div style="flex: 1; max-width: 220px; position: relative;">
+                <div id="custom-sub-year-dropdown" class="custom-dropdown" style="width: 100%;">
+                  <div class="custom-dropdown-trigger" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+                    <span id="custom-sub-trigger-label" style="color: var(--text-muted);">Select Year & Sem</span>
+                    <i class="fas fa-chevron-down" style="font-size: 0.8rem; color: var(--text-muted);"></i>
+                  </div>
+                  <div id="custom-sub-year-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+                    <!-- Populated dynamically via JS -->
+                  </div>
+                </div>
               </div>
+              <!-- Hidden native selects to retain compatibility -->
+              <select id="sub-year-filter" style="display: none;">
+                <option value="" disabled selected>Select Year</option>
+              </select>
+              <select id="sub-sem-filter" style="display: none;">
+                <option value="" disabled selected>Select Semester</option>
+              </select>
             </div>
 
             <div class="table-responsive">
@@ -209,7 +231,7 @@
           <!-- Subject Excel Upload -->
           <div class="glass-panel section-container">
             <h3>Import Subjects</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Upload Excel file (.xlsx) with columns: <strong>SubjectCode, SubjectName, Year, Semester, Department, Regulation</strong>.</p>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Upload Excel file (.xlsx) with columns: <strong>SubjectCode, SubjectName, Year, Semester, Department, Regulation, [AcademicYear], [Category (Regular/Mock)]</strong>.</p>
             
             <form id="subject-upload-form">
               <div class="file-dropzone" id="subject-dropzone">
@@ -345,27 +367,57 @@
                 <textarea id="deadline-message" class="form-control" rows="4" placeholder="Enter instructions for faculty (e.g., Please select your preferred subjects for R23 CSE regulation within the deadline)..." required></textarea>
               </div>
               
-              <div class="form-group" style="max-width: 300px;">
-                <label for="deadline-days">Deadline Window (in Days)</label>
-                <input type="number" id="deadline-days" class="form-control" min="1" max="30" value="3" required>
-              </div>
-              <div class="form-group" style="max-width: 300px;">
-                <label for="deadline-sem">Active Semester</label>
-                <select id="deadline-sem" class="form-control" required>
-                  <option value="" disabled selected>Select Semester</option>
-                </select>
-              </div>
-
-              <div class="form-group" style="max-width: 300px;">
-                <label for="deadline-year">Academic Year</label>
-                <input type="text" id="deadline-year" class="form-control" placeholder="e.g. 2026-27" required>
-              </div>
-
-              <div class="form-group" style="max-width: 300px;">
-                <label for="deadline-dept">Department</label>
-                <select id="deadline-dept" class="form-control" required>
-                  <option value="" disabled selected>Select Dept</option>
-                </select>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                <div class="form-group">
+                  <label for="deadline-days">Deadline Window (in Days)</label>
+                  <input type="number" id="deadline-days" class="form-control" min="1" max="30" value="3" required>
+                </div>
+                <div class="form-group">
+                  <label for="deadline-sem">Active Semester</label>
+                  <select id="deadline-sem" class="form-control" required>
+                    <option value="" disabled selected>Select Semester</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="deadline-class-year">Active Year</label>
+                  <select id="deadline-class-year" class="form-control" required>
+                    <option value="" disabled selected>Select Year</option>
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="deadline-year">Academic Year</label>
+                  <input type="text" id="deadline-year" class="form-control" placeholder="e.g. 2026-27" required>
+                </div>
+                <div class="form-group">
+                  <label for="deadline-dept">Department</label>
+                  <select id="deadline-dept" class="form-control" required>
+                    <option value="" disabled selected>Select Dept</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="deadline-hours-per-week">Faculty Hours Limit/Week</label>
+                  <input type="number" id="deadline-hours-per-week" class="form-control" min="1" max="40" value="16" required>
+                </div>
+                <div class="form-group">
+                  <label for="deadline-max-subjects">Max Subjects/Faculty</label>
+                  <input type="number" id="deadline-max-subjects" class="form-control" min="1" max="10" value="2" required>
+                </div>
+                <div class="form-group">
+                  <label for="deadline-subject-hours">Hours/Week per Subject</label>
+                  <input type="number" id="deadline-subject-hours" class="form-control" min="1" max="10" value="4" required>
+                </div>
+                <div class="form-group">
+                  <label for="deadline-max-regular-pref">Max Regular Choices</label>
+                  <input type="number" id="deadline-max-regular-pref" class="form-control" min="1" max="20" value="5" required>
+                </div>
+                <div class="form-group">
+                  <label for="deadline-max-mock-pref">Max Mock Choices</label>
+                  <input type="number" id="deadline-max-mock-pref" class="form-control" min="1" max="20" value="2" required>
+                </div>
               </div>
 
               <button type="submit" class="btn btn-primary">
@@ -474,6 +526,24 @@
                   </thead>
                   <tbody id="subject-allocations-table-body">
                     <tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No subject allocations.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style="margin-top: 20px; border-top: 1px solid var(--panel-border); padding-top: 15px;" id="unallocated-faculty-section">
+              <h4 style="color: var(--warning);"><i class="fas fa-exclamation-triangle"></i> Faculty Without Any Allocations</h4>
+              <div class="table-responsive" style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Faculty ID</th>
+                      <th>Faculty Name</th>
+                      <th>Email ID</th>
+                    </tr>
+                  </thead>
+                  <tbody id="unallocated-faculty-table-body">
+                    <tr><td colspan="3" style="text-align: center; color: var(--text-muted);">All faculty members have allocations.</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -630,6 +700,7 @@
       </div>
       <form id="subject-form">
         <input type="hidden" id="subject-modal-mode" value="add"> <!-- add or edit -->
+        <input type="hidden" id="subject-modal-old-id" value="">
         <div class="modal-body">
           <div class="input-wrapper">
             <input type="text" id="sub-id" placeholder=" " required>
@@ -654,7 +725,13 @@
               <option value="" disabled selected>Select Semester</option>
             </select>
           </div>
-
+          <div class="input-wrapper">
+            <select id="sub-type" class="form-control" required style="padding-top: 14px;">
+              <option value="regular">Regular Subject</option>
+              <option value="mock">Mock Subject</option>
+            </select>
+          </div>
+          <div class="input-wrapper">
             <input type="text" id="sub-regulation" placeholder=" " required>
             <label for="sub-regulation">Regulation (e.g. R23)</label>
           </div>

@@ -28,6 +28,24 @@ public class SubjectSelectionWindow {
     @Column(name="Department")
     private String department;
 
+    @Column(name="year")
+    private Integer year;
+
+    @Column(name="hours_per_week")
+    private Integer hoursPerWeek;
+
+    @Column(name="max_subjects_allocated")
+    private Integer maxSubjectsAllocated;
+
+    @Column(name="subject_hours_per_week")
+    private Integer subjectHoursPerWeek;
+
+    @Column(name="max_regular_preferences")
+    private Integer maxRegularPreferences;
+
+    @Column(name="max_mock_preferences")
+    private Integer maxMockPreferences;
+
     public SubjectSelectionWindow() {}
 
     public SubjectSelectionWindow(String message, LocalDateTime deadline, boolean active, Integer sem, String academicYear, String department) {
@@ -93,5 +111,53 @@ public class SubjectSelectionWindow {
 
     public void setDepartment(String department) {
         this.department = department;
+    }
+
+    public Integer getYear() {
+        return year;
+    }
+
+    public void setYear(Integer year) {
+        this.year = year;
+    }
+
+    public Integer getHoursPerWeek() {
+        return hoursPerWeek;
+    }
+
+    public void setHoursPerWeek(Integer hoursPerWeek) {
+        this.hoursPerWeek = hoursPerWeek;
+    }
+
+    public Integer getMaxSubjectsAllocated() {
+        return maxSubjectsAllocated;
+    }
+
+    public void setMaxSubjectsAllocated(Integer maxSubjectsAllocated) {
+        this.maxSubjectsAllocated = maxSubjectsAllocated;
+    }
+
+    public Integer getSubjectHoursPerWeek() {
+        return subjectHoursPerWeek;
+    }
+
+    public void setSubjectHoursPerWeek(Integer subjectHoursPerWeek) {
+        this.subjectHoursPerWeek = subjectHoursPerWeek;
+    }
+
+    public Integer getMaxRegularPreferences() {
+        return maxRegularPreferences;
+    }
+
+    public void setMaxRegularPreferences(Integer maxRegularPreferences) {
+        this.maxRegularPreferences = maxRegularPreferences;
+    }
+
+    public Integer getMaxMockPreferences() {
+        return maxMockPreferences;
+    }
+
+    public void setMaxMockPreferences(Integer maxMockPreferences) {
+        this.maxMockPreferences = maxMockPreferences;
     }
 }

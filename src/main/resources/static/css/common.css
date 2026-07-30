@@ -158,6 +158,12 @@ body {
   cursor: pointer;
   transition: var(--transition-smooth);
 }
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+  box-shadow: none !important;
+}
 
 .btn-primary {
   background: var(--primary-gradient);
@@ -298,6 +304,10 @@ body {
   font-family: var(--font-family);
   font-size: 0.95rem;
   transition: var(--transition-smooth);
+}
+select option {
+  background-color: #0f172a !important;
+  color: var(--text-main) !important;
 }
 .form-control:focus {
   outline: none;

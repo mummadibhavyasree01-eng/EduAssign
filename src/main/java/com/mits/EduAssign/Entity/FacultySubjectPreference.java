@@ -18,11 +18,21 @@ public class FacultySubjectPreference {
     @Column(name="SubjectId", nullable=false)
     private String subjectId;
 
+    @Column(name="is_mock", nullable=false)
+    private boolean isMock = false;
+
     public FacultySubjectPreference() {}
 
     public FacultySubjectPreference(String facultyId, String subjectId) {
         this.facultyId = facultyId;
         this.subjectId = subjectId;
+        this.isMock = false;
+    }
+
+    public FacultySubjectPreference(String facultyId, String subjectId, boolean isMock) {
+        this.facultyId = facultyId;
+        this.subjectId = subjectId;
+        this.isMock = isMock;
     }
 
     public Long getId() {
@@ -47,5 +57,13 @@ public class FacultySubjectPreference {
 
     public void setSubjectId(String subjectId) {
         this.subjectId = subjectId;
+    }
+
+    public boolean isMock() {
+        return isMock;
+    }
+
+    public void setMock(boolean isMock) {
+        this.isMock = isMock;
     }
 }

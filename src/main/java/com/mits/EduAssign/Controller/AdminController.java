@@ -158,8 +158,17 @@ public class AdminController {
 	            @RequestParam int days,
 	            @RequestParam(required = false) Integer sem,
 	            @RequestParam String academicYear,
-	            @RequestParam String department) {
-	        return ResponseEntity.ok(subjectService.setDeadline(message, days, sem, academicYear, department));
+	            @RequestParam String department,
+	            @RequestParam(required = false) Integer year,
+	            @RequestParam(required = false) Integer hoursPerWeek,
+	            @RequestParam(required = false) Integer maxSubjectsAllocated,
+	            @RequestParam(required = false) Integer subjectHoursPerWeek,
+	            @RequestParam(required = false) Integer maxRegularPreferences,
+	            @RequestParam(required = false) Integer maxMockPreferences) {
+	        return ResponseEntity.ok(subjectService.setDeadline(
+	                message, days, sem, academicYear, department,
+	                year, hoursPerWeek, maxSubjectsAllocated,
+	                subjectHoursPerWeek, maxRegularPreferences, maxMockPreferences));
 	    }
 
 	    @GetMapping("/deadline")

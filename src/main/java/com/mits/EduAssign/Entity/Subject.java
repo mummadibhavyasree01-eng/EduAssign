@@ -21,6 +21,8 @@ public class Subject {
 	private String dep;
 	@Column(name="AcademicYear")
 	private String academicYear;
+	@Column(name="is_mock", nullable=false)
+	private boolean isMock = false;
 
 	public String getName() {
 		return name;
@@ -63,5 +65,11 @@ public class Subject {
 	}
 	public void setAcademicYear(String academicYear) {
 		this.academicYear = academicYear;
+	}
+	public boolean isMock() {
+		return isMock;
+	}
+	public void setMock(boolean isMock) {
+		this.isMock = isMock;
 	}
 }
