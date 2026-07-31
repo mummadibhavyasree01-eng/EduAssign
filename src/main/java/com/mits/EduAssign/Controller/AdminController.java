@@ -194,6 +194,18 @@ public class AdminController {
 	        return ResponseEntity.ok(subjectService.getAllocations());
 	    }
 
+	    @PostMapping("/swap-allocations")
+	    public ResponseEntity<?> swapAllocations(
+	            @RequestParam Long id1,
+	            @RequestParam Long id2) {
+	        try {
+	            subjectService.swapAllocations(id1, id2);
+	            return ResponseEntity.ok("Allocations swapped successfully");
+	        } catch (IllegalArgumentException e) {
+	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+	        }
+	    }
+
 	    @DeleteMapping("/allocation/{id}")
 	    public ResponseEntity<?> deleteAllocation(@PathVariable Long id) {
 	        boolean deleted = subjectService.deleteAllocation(id);

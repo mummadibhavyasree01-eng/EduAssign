@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let selectionWindow = null;
   let currentStep = 1;
   let isSelectionPeriodActive = false;
+  let facultyHasMockAllocation = false;
 
   // Profile Form update
   document.getElementById('profile-form').addEventListener('submit', async (e) => {
@@ -206,20 +207,19 @@ document.addEventListener('DOMContentLoaded', async () => {
        const res = await Promise.all([
          apiRequest('/subject/viewAll'),
          apiRequest(`/faculty/preferences/${currentUser.id}`),
-         apiRequest('/adminfaculty/deadline')
+         apiRequest('/adminfaculty/deadline'),
+         apiRequest(`/faculty/has-mock-allocation/${currentUser.id}`).catch(err => {
+           console.error('Failed to check past mock allocation status:', err);
+           return false;
+         })
        ]);
        const allSubjects = res[0];
        const preferences = res[1];
        selectionWindow = res[2];
+       facultyHasMockAllocation = res[3];
 
       subjects = Array.isArray(allSubjects) ? allSubjects : [];
       facultyPreferences = Array.isArray(preferences) ? preferences : [];
-      
-      // Separate normal and mock selections
-      selectedOrder = facultyPreferences.filter(p => !p.mock).map(p => p.subjectId);
-      selectedMockOrder = facultyPreferences.filter(p => p.mock).map(p => p.subjectId);
-      originalOrder = [...selectedOrder];
-      originalMockOrder = [...selectedMockOrder];
 
       if (selectionWindow && selectionWindow.active) {
         if (selectionWindow.year) {
@@ -235,6 +235,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           subjects = subjects.filter(s => s.academicYear && s.academicYear.toLowerCase() === selectionWindow.academicYear.toLowerCase());
         }
       }
+
+      // Filter facultyPreferences to only keep preferences whose subjectId belongs to the currently active subjects
+      facultyPreferences = facultyPreferences.filter(p => subjects.some(s => s.id === p.subjectId));
+
+      // Separate normal and mock selections
+      selectedOrder = facultyPreferences.filter(p => !p.mock).map(p => p.subjectId);
+      selectedMockOrder = facultyPreferences.filter(p => p.mock).map(p => p.subjectId);
+      originalOrder = [...selectedOrder];
+      originalMockOrder = [...selectedMockOrder];
 
       if (facultyPreferences.length > 0) {
         currentStep = 3;
@@ -565,12 +574,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToast('Selection Empty', 'Please select at least one subject preference.', 'warning');
         return;
       }
-      currentStep = 2;
-      prefSelectionSection.style.display = 'none';
-      mockSection.style.display = 'block';
-      previewSection.style.display = 'none';
-      document.getElementById('subject-search').value = '';
-      renderMockSubjectList(subjects);
+      
+      if (facultyHasMockAllocation) {
+        currentStep = 3;
+        prefSelectionSection.style.display = 'none';
+        mockSection.style.display = 'none';
+        previewSection.style.display = 'block';
+        if (searchBoxWrapper) searchBoxWrapper.style.display = 'none';
+        selectedMockOrder = [];
+        renderPreviewTable();
+      } else {
+        currentStep = 2;
+        prefSelectionSection.style.display = 'none';
+        mockSection.style.display = 'block';
+        previewSection.style.display = 'none';
+        document.getElementById('subject-search').value = '';
+        
+        const mockDesc = document.querySelector('#mock-section p');
+        if (mockDesc) {
+          mockDesc.innerHTML = 'Please select at least one subject for mock allocation below <strong style="color: var(--warning);">(compulsory)</strong>.';
+        }
+        
+        renderMockSubjectList(subjects);
+      }
     });
   }
 
@@ -587,7 +613,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (mockSubmitBtn) {
     mockSubmitBtn.addEventListener('click', () => {
-      if (selectedMockOrder.length === 0) {
+      if (selectedMockOrder.length === 0 && !facultyHasMockAllocation) {
         showToast('Mock Required', 'Every faculty must select at least one subject for Mock.', 'warning');
         return;
       }
@@ -602,13 +628,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (previewBackBtn) {
     previewBackBtn.addEventListener('click', () => {
-      currentStep = 2;
-      prefSelectionSection.style.display = 'none';
-      mockSection.style.display = 'block';
-      previewSection.style.display = 'none';
-      if (searchBoxWrapper) searchBoxWrapper.style.display = 'block';
-      document.getElementById('subject-search').value = '';
-      renderMockSubjectList(subjects);
+      if (facultyHasMockAllocation) {
+        currentStep = 1;
+        prefSelectionSection.style.display = 'block';
+        mockSection.style.display = 'none';
+        previewSection.style.display = 'none';
+        if (searchBoxWrapper) searchBoxWrapper.style.display = 'block';
+        document.getElementById('subject-search').value = '';
+        renderSubjectPreferencesList(subjects);
+      } else {
+        currentStep = 2;
+        prefSelectionSection.style.display = 'none';
+        mockSection.style.display = 'block';
+        previewSection.style.display = 'none';
+        if (searchBoxWrapper) searchBoxWrapper.style.display = 'block';
+        document.getElementById('subject-search').value = '';
+        renderMockSubjectList(subjects);
+      }
     });
   }
 
@@ -621,7 +657,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    if (selectedMockOrder.length === 0) {
+    if (selectedMockOrder.length === 0 && !facultyHasMockAllocation) {
       showToast('Mock Required', 'Every faculty must select at least one subject for Mock.', 'warning');
       return;
     }

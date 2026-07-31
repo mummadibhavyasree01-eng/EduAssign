@@ -29,6 +29,19 @@ function showToast(title, message, type = 'info') {
     </div>
   `;
 
+  const dismissToast = () => {
+    if (toast.classList.contains('show')) {
+      toast.classList.remove('show');
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 300);
+    }
+  };
+
+  toast.addEventListener('click', dismissToast);
+
   container.appendChild(toast);
   
   // Trigger slide-in animation
@@ -36,13 +49,8 @@ function showToast(title, message, type = 'info') {
     toast.classList.add('show');
   }, 10);
 
-  // Auto-remove toast after 4 seconds
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => {
-      toast.remove();
-    }, 400);
-  }, 4000);
+  // Auto-remove toast after 0.75 seconds (750ms)
+  setTimeout(dismissToast, 750);
 }
 
 // Custom Confirm Modal

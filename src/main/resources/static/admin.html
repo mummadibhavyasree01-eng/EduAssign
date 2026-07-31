@@ -39,9 +39,9 @@
           <i class="fas fa-diagram-project"></i>
           <span>Subject Allocation</span>
         </a>
-        <a href="#" class="nav-item" data-target="section-allocation-tab">
-          <i class="fas fa-border-all"></i>
-          <span>Section Allocation</span>
+        <a href="#" class="nav-item" data-target="allocation-report-tab">
+          <i class="fas fa-file-invoice"></i>
+          <span>Allocation Report</span>
         </a>
         <a href="#" class="nav-item" data-target="profile-tab">
           <i class="fas fa-user-gear"></i>
@@ -474,14 +474,49 @@
           </div>
         </div>
 
+        <!-- Allocation Statistics & Constraints Dashboard -->
+        <div class="glass-panel section-container" style="margin-bottom: 20px; padding: 20px;">
+          <h4 style="margin-bottom: 12px; color: var(--secondary);"><i class="fas fa-chart-pie"></i> Allocation Statistics & Constraints</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px;">
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; text-align: center;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Total Subjects</span>
+              <strong id="stats-total-subjects" style="font-size: 1.4rem; color: var(--text-main);">0</strong>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; text-align: center;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Total Sections</span>
+              <strong id="stats-total-sections" style="font-size: 1.4rem; color: var(--text-main);">0</strong>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; text-align: center;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Allocated Subjects</span>
+              <strong id="stats-allocated-subjects" style="font-size: 1.4rem; color: var(--text-main);">0</strong>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; text-align: center;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Regular / Mock</span>
+              <span style="font-size: 1.1rem; font-weight: bold; color: var(--text-main); display: block; margin-top: 4px;">
+                <span id="stats-allocated-regular" style="color: var(--secondary);">0</span> / <span id="stats-allocated-mock" style="color: var(--primary);">0</span>
+              </span>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; text-align: center;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Pending Sections</span>
+              <strong id="stats-pending-sections" style="font-size: 1.4rem; color: var(--warning);">0</strong>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; text-align: center;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Faculty Load Limits</span>
+              <span style="font-size: 0.85rem; color: var(--text-main); display: block; margin-top: 8px;">
+                Max: <strong id="stats-workload-limit">14</strong>h | Sub: <strong id="stats-subject-hours">4</strong>h
+              </span>
+            </div>
+          </div>
+        </div>
+
         <div class="allocation-grid" id="allocation-workspace" style="display: grid; grid-template-columns: 1fr; gap: 20px;">
           
           <!-- Column 1: Subject Allocation -->
           <div class="glass-panel section-container" style="height: fit-content; display: flex; flex-direction: column; gap: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <h3>Subject Allocation</h3>
-                <p style="font-size: 0.85rem; color: var(--text-muted);">Assign subjects to faculty members (Auto or Manual).</p>
+                <h3>Subject & Section Allocation</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">Assign subjects and sections to faculty members (Auto or Manual).</p>
               </div>
             </div>
             
@@ -501,6 +536,18 @@
                 </ul>
               </div>
 
+              <!-- Selected Faculty load details -->
+              <div id="selected-faculty-load-details" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; margin-bottom: 20px; font-size: 0.85rem;">
+                <h5 style="margin-bottom: 8px; color: var(--secondary); font-size: 0.82rem; text-transform: uppercase;">Faculty Load Profile:</h5>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <div>Workload: <strong id="load-workload-hours">0/14</strong> hrs</div>
+                  <div>Subjects: <strong id="load-subjects-count">0</strong>/3</div>
+                  <div>Regular: <strong id="load-regular-count">0</strong></div>
+                  <div>Mock: <strong id="load-mock-count">0</strong></div>
+                </div>
+                <div id="load-status-msg" style="margin-top: 8px; font-weight: 500;"></div>
+              </div>
+
               <div class="form-group">
                 <label for="alloc-subject-select">Select Subject</label>
                 <select id="alloc-subject-select" class="form-control" required>
@@ -508,26 +555,46 @@
                 </select>
               </div>
 
+              <div class="form-group">
+                <label for="alloc-section-select">Select Section</label>
+                <select id="alloc-section-select" class="form-control" required>
+                  <option value="" disabled selected>Choose Section...</option>
+                </select>
+              </div>
+
               <button type="submit" class="btn btn-primary btn-block">
-                <i class="fas fa-link"></i> Allocate Subject
+                <i class="fas fa-link"></i> Allocate Subject & Section
               </button>
             </form>
 
             <div style="margin-top: 10px;">
-              <h4>Subject Allocations List</h4>
+              <h4>Subject & Section Allocations List</h4>
               <div class="table-responsive" style="max-height: 350px; overflow-y: auto; margin-top: 10px;">
                 <table class="table">
                   <thead>
                     <tr>
                       <th>Faculty</th>
-                      <th>Subject</th>
-                      <th style="text-align: right;">Action</th>
+                      <th>Subject (Allocated Sections)</th>
                     </tr>
                   </thead>
                   <tbody id="subject-allocations-table-body">
-                    <tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No subject allocations.</td></tr>
+                    <tr><td colspan="2" style="text-align: center; color: var(--text-muted);">No subject allocations.</td></tr>
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            <div style="margin-top: 20px; border-top: 1px solid var(--panel-border); padding-top: 15px;">
+              <h4>Swap Allocations</h4>
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Select two allocations to swap their assigned faculties.</p>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <select id="swap-alloc-1" class="form-control" style="flex: 1; min-width: 200px;">
+                  <option value="" disabled selected>Allocation 1...</option>
+                </select>
+                <select id="swap-alloc-2" class="form-control" style="flex: 1; min-width: 200px;">
+                  <option value="" disabled selected>Allocation 2...</option>
+                </select>
+                <button type="button" class="btn btn-primary" onclick="swapAllocationsBtn()">Swap</button>
               </div>
             </div>
 
@@ -552,77 +619,70 @@
         </div>
       </section>
 
-      <!-- SECTION ALLOCATION TAB -->
-      <section id="section-allocation-tab" class="tab-content">
-        <!-- Before deadline warning -->
-        <div class="glass-panel info-banner" id="section-allocation-warning" style="display: none; border-color: var(--warning); background: rgba(245,158,11,0.06); padding: 20px; margin-bottom: 20px;">
-          <h4 style="color: var(--warning); display: flex; align-items: center; gap: 8px;">
-            <i class="fas fa-exclamation-triangle"></i> Subject Selection Period Active
-          </h4>
-          <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 6px;">Still there is time for faculty to select subjects. You cannot perform section allocations until the selection deadline is reached.</p>
-        </div>
-
-        <!-- Section Allocation Header Banner -->
-        <div class="glass-panel section-container" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; padding: 20px; flex-wrap: wrap; gap: 16px;">
-          <div>
-            <h3 style="margin-bottom: 4px;">Section Allocation Workspace</h3>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">Assign sections to the subject-allocated faculty.</p>
-          </div>
-        </div>
-
-        <div class="allocation-grid" id="section-allocation-workspace" style="display: grid; grid-template-columns: 1fr; gap: 20px;">
-          <!-- Section Allocation Container -->
-          <div class="glass-panel section-container" style="height: fit-content; display: flex; flex-direction: column; gap: 20px;">
+      <!-- ALLOCATION REPORT TAB -->
+      <section id="allocation-report-tab" class="tab-content">
+        <div class="glass-panel section-container">
+          <div class="section-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
             <div>
-              <h3>Section Allocation</h3>
-              <p style="font-size: 0.85rem; color: var(--text-muted);">Assign sections to the subject-allocated faculty.</p>
+              <h3>Year-Wise Allocation Report</h3>
+              <p style="color: var(--text-muted); font-size: 0.9rem;">View all faculty details along with their allocated subjects and sections</p>
             </div>
-            
-            <form id="allocate-section-form">
-              <div class="form-group">
-                <label for="alloc-sec-subject-select">Select Allocated Subject</label>
-                <select id="alloc-sec-subject-select" class="form-control" required>
-                  <option value="" disabled selected>Choose Subject...</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="alloc-sec-faculty-select">Select Allocated Faculty</label>
-                <select id="alloc-sec-faculty-select" class="form-control" required>
-                  <option value="" disabled selected>Choose Faculty...</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="alloc-section-select">Select Section</label>
-                <select id="alloc-section-select" class="form-control" required>
-                  <option value="" disabled selected>Choose Section...</option>
-                </select>
-              </div>
-
-              <button type="submit" class="btn btn-secondary btn-block">
-                <i class="fas fa-border-all"></i> Allocate Section
+            <div class="action-buttons" style="display: flex; gap: 12px; align-items: center;">
+              <button class="btn btn-secondary" onclick="exportReportToExcel()" style="background: var(--secondary-gradient); border: none; color: #fff; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 0 10px rgba(20, 184, 166, 0.3); height: 40px; padding: 8px 16px; border-radius: var(--border-radius-md); font-weight: 500;">
+                <i class="fas fa-file-excel"></i> Export Report
               </button>
-            </form>
+            </div>
+          </div>
 
-            <div style="margin-top: 10px;">
-              <h4>Section Allocations List</h4>
-              <div class="table-responsive" style="max-height: 350px; overflow-y: auto; margin-top: 10px;">
-                <table class="table">
-                  <thead>
-                    <tr>
-                      <th>Faculty</th>
-                      <th>Subject</th>
-                      <th>Section</th>
-                      <th style="text-align: right;">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody id="section-allocations-table-body">
-                    <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No section allocations.</td></tr>
-                  </tbody>
-                </table>
+          <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 500px;">
+            <div style="flex: 1; max-width: 220px;">
+              <input type="text" id="report-academic-year-input" class="form-control" placeholder="Academic Year (e.g. 2026-27)" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
+            </div>
+            <div style="flex: 1; max-width: 220px; position: relative;">
+              <div id="custom-dept-dropdown" class="custom-dropdown" style="width: 100%;">
+                <div class="custom-dropdown-trigger" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+                  <span id="custom-dept-trigger-label" style="color: var(--text-muted);">Select Dept & Sem</span>
+                  <i class="fas fa-chevron-down" style="font-size: 0.8rem; color: var(--text-muted);"></i>
+                </div>
+                <div id="custom-dept-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+                  <!-- Populated dynamically via JS -->
+                </div>
               </div>
             </div>
+            <!-- Hidden native selects to retain full compatibility -->
+            <select id="report-dept-select" style="display: none;">
+              <option value="" disabled selected>Select Department</option>
+            </select>
+            <select id="report-sem-select" style="display: none;">
+              <option value="" disabled selected>Select Semester</option>
+            </select>
+          </div>
+          
+          <div class="search-bar-wrapper" style="margin-bottom: 20px; position: relative;">
+            <i class="fas fa-search search-icon" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+            <input type="text" id="report-search" class="form-control" placeholder="Search faculty by name, ID, or allocated subject..." style="padding-left: 44px; height: 40px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); width: 100%;">
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Faculty ID</th>
+                  <th>Faculty Name</th>
+                  <th>Year 1</th>
+                  <th>Year 2</th>
+                  <th>Year 3</th>
+                  <th>Year 4</th>
+                </tr>
+              </thead>
+              <tbody id="report-table-body">
+                <tr>
+                  <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                    Please enter Academic Year, select Department, and select Semester to view the report.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>

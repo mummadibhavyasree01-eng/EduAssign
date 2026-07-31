@@ -81,7 +81,7 @@ body {
 /* Toast Notifications */
 #toast-container {
   position: fixed;
-  top: 24px;
+  bottom: 24px;
   right: 24px;
   z-index: 9999;
   display: flex;
@@ -89,9 +89,12 @@ body {
   gap: 12px;
   max-width: 380px;
   width: 100%;
+  pointer-events: none;
 }
 
 .toast {
+  pointer-events: auto;
+  cursor: pointer;
   background: rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(8px);
   border-left: 4px solid var(--primary);

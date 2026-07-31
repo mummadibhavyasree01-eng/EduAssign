@@ -59,6 +59,11 @@ public class FacultyController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/has-mock-allocation/{facultyId}")
+    public ResponseEntity<Boolean> hasMockAllocation(@PathVariable String facultyId) {
+        return ResponseEntity.ok(subjectService.hasPreviousMockAllocation(facultyId));
+    }
+
     @PutMapping("/update")
     public ResponseEntity<?> updateProfile(@RequestBody AdminFaculty updatedFaculty) {
         AdminFaculty faculty = adminService.updateProfilef(updatedFaculty.getId(), updatedFaculty);
