@@ -217,6 +217,15 @@ document.addEventListener('DOMContentLoaded', () => {
         subYearFilter.appendChild(opt);
       });
     }
+    const prefYearFilter = document.getElementById('pref-year-filter');
+    if (prefYearFilter && prefYearFilter.options.length <= 1) {
+      academicYears.forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = y.yearNumber;
+        opt.innerText = y.name;
+        prefYearFilter.appendChild(opt);
+      });
+    }
 
     if (semFilter && semFilter.options.length <= 1) {
       const sortedSems = [...semesters].sort((a,b) => a.semNumber - b.semNumber);
@@ -239,11 +248,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function populateCustomPrefDropdown() {
-    const menuEl = document.getElementById('custom-pref-dept-menu');
+    const menuEl = document.getElementById('custom-pref-year-menu');
     if (!menuEl) return;
     
     menuEl.innerHTML = '';
-    departments.forEach(d => {
+    academicYears.forEach(y => {
       const item = document.createElement('div');
       item.className = 'custom-dept-item';
       item.style.position = 'relative';
@@ -258,12 +267,12 @@ document.addEventListener('DOMContentLoaded', () => {
       
       item.innerHTML = `
         <div class="dept-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; pointer-events: none;">
-          <span>${d.code} - ${d.name}</span>
+          <span>${y.name}</span>
           <i class="fas fa-chevron-down" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease;"></i>
         </div>
         <div class="custom-sem-submenu" style="display: none; flex-direction: column; gap: 4px; margin-top: 8px; width: 100%; padding-left: 12px; box-sizing: border-box;">
           ${semesters.map(s => `
-            <button type="button" class="sem-opt-btn" data-dept="${d.code}" data-sem="${s.semNumber}" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border); border-radius: var(--border-radius-sm); color: var(--text-main); padding: 6px 12px; font-size: 0.82rem; text-align: left; width: 100%; cursor: pointer; transition: all 0.2s ease;">
+            <button type="button" class="sem-opt-btn" data-year="${y.yearNumber}" data-sem="${s.semNumber}" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border); border-radius: var(--border-radius-sm); color: var(--text-main); padding: 6px 12px; font-size: 0.82rem; text-align: left; width: 100%; cursor: pointer; transition: all 0.2s ease;">
               ${s.name}
             </button>
           `).join('')}
@@ -318,15 +327,15 @@ document.addEventListener('DOMContentLoaded', () => {
       
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const deptCode = btn.getAttribute('data-dept');
+        const yearVal = btn.getAttribute('data-year');
         const semVal = btn.getAttribute('data-sem');
         
         // Update hidden native selects
-        const deptSelect = document.getElementById('pref-dept-filter');
+        const yearSelect = document.getElementById('pref-year-filter');
         const semSelect = document.getElementById('pref-sem-filter');
-        if (deptSelect) {
-          deptSelect.value = deptCode;
-          deptSelect.dispatchEvent(new Event('change'));
+        if (yearSelect) {
+          yearSelect.value = yearVal;
+          yearSelect.dispatchEvent(new Event('change'));
         }
         if (semSelect) {
           semSelect.value = semVal;
@@ -334,14 +343,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Update trigger button text
+        const yearObj = academicYears.find(y => String(y.yearNumber) === String(yearVal));
+        const yearName = yearObj ? yearObj.name : `${yearVal} Year`;
         const triggerLabel = document.getElementById('custom-pref-trigger-label');
         if (triggerLabel) {
-          triggerLabel.innerText = `${deptCode} - Sem ${semVal}`;
+          triggerLabel.innerText = `${yearName} - Sem ${semVal}`;
           triggerLabel.style.color = 'var(--text-main)';
         }
         
         // Hide dropdown
-        const dropdownMenu = document.getElementById('custom-pref-dept-menu');
+        const dropdownMenu = document.getElementById('custom-pref-year-menu');
         if (dropdownMenu) dropdownMenu.style.display = 'none';
       });
     });
@@ -481,6 +492,9 @@ document.addEventListener('DOMContentLoaded', () => {
     filtered = filtered.filter(p => data.facultyMap[p.facultyId] && data.subjectsMap[p.subjectId]);
 
     // Apply optional filters
+    const yearFilterEl = document.getElementById('pref-year-filter');
+    const yearVal = yearFilterEl ? yearFilterEl.value : '';
+
     if (deptVal) {
       filtered = filtered.filter(p => {
         const sub = data.subjectsMap[p.subjectId];
@@ -491,6 +505,12 @@ document.addEventListener('DOMContentLoaded', () => {
       filtered = filtered.filter(p => {
         const sub = data.subjectsMap[p.subjectId];
         return sub && Number(sub.sem) === Number(semVal);
+      });
+    }
+    if (yearVal) {
+      filtered = filtered.filter(p => {
+        const sub = data.subjectsMap[p.subjectId];
+        return sub && Number(sub.year) === Number(yearVal);
       });
     }
 
@@ -530,8 +550,11 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Group the faculty's preferences by year
       const yearGroups = {};
-      const normalPrefs = prefsList.filter(p => p.mock !== true);
-      const mockPrefs = prefsList.filter(p => p.mock === true);
+      const maxRegLimit = (selectionWindow && selectionWindow.maxRegularPreferences) ? Number(selectionWindow.maxRegularPreferences) : 5;
+      const maxMockLimit = (selectionWindow && selectionWindow.maxMockPreferences) ? Number(selectionWindow.maxMockPreferences) : 2;
+
+      const normalPrefs = prefsList.filter(p => p.mock !== true).slice(0, maxRegLimit);
+      const mockPrefs = prefsList.filter(p => p.mock === true).slice(0, maxMockLimit);
 
       normalPrefs.forEach((p, index) => {
         const sub = data.subjectsMap[p.subjectId];
@@ -639,6 +662,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const allSubjects = Object.values(data.subjectsMap);
 
     // Filter subjects by selected criteria
+    const yearFilterEl = document.getElementById('pref-year-filter');
+    const yearVal = yearFilterEl ? yearFilterEl.value : '';
+
     let matchingSubjects = allSubjects;
     if (academicYearVal) {
       matchingSubjects = matchingSubjects.filter(s => s.academicYear && s.academicYear.toLowerCase() === academicYearVal.toLowerCase());
@@ -648,6 +674,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (semVal) {
       matchingSubjects = matchingSubjects.filter(s => Number(s.sem) === Number(semVal));
+    }
+    if (yearVal) {
+      matchingSubjects = matchingSubjects.filter(s => Number(s.year) === Number(yearVal));
     }
 
     const matchingSubjectIds = new Set(matchingSubjects.map(s => s.id));
@@ -698,6 +727,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   document.getElementById('pref-dept-filter').addEventListener('change', handleFilterChange);
   document.getElementById('pref-sem-filter').addEventListener('change', handleFilterChange);
+  const prefYearFilter = document.getElementById('pref-year-filter');
+  if (prefYearFilter) {
+    prefYearFilter.addEventListener('change', handleFilterChange);
+  }
 
   // ----------------------------------------------------
   // SUBJECT CRUD
@@ -1415,6 +1448,26 @@ document.addEventListener('DOMContentLoaded', () => {
       selectionWindow = await apiRequest('/adminfaculty/deadline');
       await populateDeadlineDropdowns();
 
+      // Disable/enable Publish button based on running status
+      const submitBtn = document.querySelector('#deadline-form button[type="submit"]');
+      let isRunning = false;
+      if (selectionWindow && selectionWindow.active) {
+        const deadlineTime = new Date(selectionWindow.deadline);
+        const now = new Date();
+        if (now < deadlineTime) {
+          isRunning = true;
+        }
+      }
+      if (submitBtn) {
+        if (isRunning) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<i class="fas fa-lock"></i> Selection Window Running';
+        } else {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Publish Selection Window';
+        }
+      }
+
       if (selectionWindow) {
         document.getElementById('deadline-message').value = selectionWindow.message || '';
         if (selectionWindow.sem) {
@@ -1428,15 +1481,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (selectionWindow.year) {
           document.getElementById('deadline-class-year').value = selectionWindow.year;
-        }
-        if (selectionWindow.hoursPerWeek) {
-          document.getElementById('deadline-hours-per-week').value = selectionWindow.hoursPerWeek;
-        }
-        if (selectionWindow.maxSubjectsAllocated) {
-          document.getElementById('deadline-max-subjects').value = selectionWindow.maxSubjectsAllocated;
-        }
-        if (selectionWindow.subjectHoursPerWeek) {
-          document.getElementById('deadline-subject-hours').value = selectionWindow.subjectHoursPerWeek;
         }
         if (selectionWindow.maxRegularPreferences) {
           document.getElementById('deadline-max-regular-pref').value = selectionWindow.maxRegularPreferences;
@@ -1480,14 +1524,6 @@ document.addEventListener('DOMContentLoaded', () => {
               <span style="color: var(--text-muted);">Max Mock:</span>
               <strong style="color: var(--text-muted); margin-left: 4px;">${selectionWindow.maxMockPreferences || 'N/A'}</strong>
             </div>
-            <div>
-              <span style="color: var(--text-muted);">Hours Limit:</span>
-              <strong style="color: var(--text-muted); margin-left: 4px;">${selectionWindow.hoursPerWeek || 'N/A'}h</strong>
-            </div>
-            <div>
-              <span style="color: var(--text-muted);">Subject Hours:</span>
-              <strong style="color: var(--text-muted); margin-left: 4px;">${selectionWindow.subjectHoursPerWeek || 'N/A'}h</strong>
-            </div>
           </div>
 
           <p style="font-size: 0.95rem; font-weight: 500; margin-top: 12px;">Deadline Passed on:</p>
@@ -1519,14 +1555,6 @@ document.addEventListener('DOMContentLoaded', () => {
               <span style="color: var(--text-muted);">Max Mock:</span>
               <strong style="color: var(--secondary); margin-left: 4px;">${selectionWindow.maxMockPreferences || 'N/A'}</strong>
             </div>
-            <div>
-              <span style="color: var(--text-muted);">Hours Limit:</span>
-              <strong style="color: var(--secondary); margin-left: 4px;">${selectionWindow.hoursPerWeek || 'N/A'}h</strong>
-            </div>
-            <div>
-              <span style="color: var(--text-muted);">Subject Hours:</span>
-              <strong style="color: var(--secondary); margin-left: 4px;">${selectionWindow.subjectHoursPerWeek || 'N/A'}h</strong>
-            </div>
           </div>
 
           <p style="font-size: 0.95rem; font-weight: 600; margin-top: 12px;">Time Remaining:</p>
@@ -1552,15 +1580,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (selectionWindow.year) {
         document.getElementById('deadline-class-year').value = selectionWindow.year;
       }
-      if (selectionWindow.hoursPerWeek) {
-        document.getElementById('deadline-hours-per-week').value = selectionWindow.hoursPerWeek;
-      }
-      if (selectionWindow.maxSubjectsAllocated) {
-        document.getElementById('deadline-max-subjects').value = selectionWindow.maxSubjectsAllocated;
-      }
-      if (selectionWindow.subjectHoursPerWeek) {
-        document.getElementById('deadline-subject-hours').value = selectionWindow.subjectHoursPerWeek;
-      }
       if (selectionWindow.maxRegularPreferences) {
         document.getElementById('deadline-max-regular-pref').value = selectionWindow.maxRegularPreferences;
       }
@@ -1583,9 +1602,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const academicYear = document.getElementById('deadline-year').value.trim();
     const department = document.getElementById('deadline-dept').value;
     const year = parseInt(document.getElementById('deadline-class-year').value);
-    const hoursPerWeek = parseInt(document.getElementById('deadline-hours-per-week').value);
-    const maxSubjectsAllocated = parseInt(document.getElementById('deadline-max-subjects').value);
-    const subjectHoursPerWeek = parseInt(document.getElementById('deadline-subject-hours').value);
     const maxRegularPreferences = parseInt(document.getElementById('deadline-max-regular-pref').value);
     const maxMockPreferences = parseInt(document.getElementById('deadline-max-mock-pref').value);
 
@@ -1597,9 +1613,9 @@ document.addEventListener('DOMContentLoaded', () => {
       params.append('academicYear', academicYear);
       params.append('department', department);
       params.append('year', year);
-      params.append('hoursPerWeek', hoursPerWeek);
-      params.append('maxSubjectsAllocated', maxSubjectsAllocated);
-      params.append('subjectHoursPerWeek', subjectHoursPerWeek);
+      params.append('hoursPerWeek', 14);
+      params.append('maxSubjectsAllocated', 3);
+      params.append('subjectHoursPerWeek', 4);
       params.append('maxRegularPreferences', maxRegularPreferences);
       params.append('maxMockPreferences', maxMockPreferences);
 
@@ -1621,13 +1637,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       const prefDeptSelect = document.getElementById('pref-dept-filter');
+      const prefYearFilter = document.getElementById('pref-year-filter');
       const prefSemSelect = document.getElementById('pref-sem-filter');
       if (prefDeptSelect) prefDeptSelect.value = department;
+      if (prefYearFilter) prefYearFilter.value = year;
       if (prefSemSelect) prefSemSelect.value = sem;
       
       const prefTriggerLabel = document.getElementById('custom-pref-trigger-label');
       if (prefTriggerLabel) {
-        prefTriggerLabel.innerText = `${department} - Sem ${sem}`;
+        prefTriggerLabel.innerText = `Year ${year} - Sem ${sem}`;
         prefTriggerLabel.style.color = 'var(--text-main)';
       }
       
@@ -1685,7 +1703,6 @@ document.addEventListener('DOMContentLoaded', () => {
           workspace.style.pointerEvents = 'none';
           workspace.style.opacity = '0.5';
         }
-        if (autoAllocBtn) autoAllocBtn.disabled = true;
         if (finalizeBtn) finalizeBtn.disabled = true;
       } else {
         if (warningBanner) warningBanner.style.display = 'none';
@@ -1693,10 +1710,13 @@ document.addEventListener('DOMContentLoaded', () => {
           workspace.style.pointerEvents = 'auto';
           workspace.style.opacity = '1';
         }
-        if (autoAllocBtn) autoAllocBtn.disabled = false;
       }
 
       await calculateAllocationStats();
+
+      // Do not auto-populate query inputs from selectionWindow to keep them empty/0 by default
+
+      initAutoAllocationPageInputs();
 
     } catch (error) {
       console.error(error);
@@ -1733,10 +1753,27 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('stats-total-subjects').innerText = totalSubjects;
 
       // Workload and Hours limits
-      const workloadLimit = (selectionWindow && selectionWindow.hoursPerWeek) ? selectionWindow.hoursPerWeek : 14;
-      const subjectHours = (selectionWindow && selectionWindow.subjectHoursPerWeek) ? selectionWindow.subjectHoursPerWeek : 4;
+      const workloadLimitInput = document.getElementById('page-hours-limit');
+      const subjectHoursInput = document.getElementById('page-subject-hours');
+      const workloadLimit = (workloadLimitInput && workloadLimitInput.value) ? Number(workloadLimitInput.value) : 0;
+      const subjectHours = (subjectHoursInput && subjectHoursInput.value) ? Number(subjectHoursInput.value) : 0;
       document.getElementById('stats-workload-limit').innerText = workloadLimit;
       document.getElementById('stats-subject-hours').innerText = subjectHours;
+
+      // Subject limits
+      const maxSubsInput = document.getElementById('page-max-subjects');
+      const maxRegularInput = document.getElementById('page-max-regular');
+      const maxMockInput = document.getElementById('page-max-mock');
+      const maxSubsLimit = (maxSubsInput && maxSubsInput.value) ? Number(maxSubsInput.value) : 0;
+      const maxRegularLimit = (maxRegularInput && maxRegularInput.value) ? Number(maxRegularInput.value) : 0;
+      const maxMockLimit = (maxMockInput && maxMockInput.value) ? Number(maxMockInput.value) : 0;
+      
+      const statsLimitTotal = document.getElementById('stats-limit-total');
+      const statsLimitRegular = document.getElementById('stats-limit-regular');
+      const statsLimitMock = document.getElementById('stats-limit-mock');
+      if (statsLimitTotal) statsLimitTotal.innerText = maxSubsLimit;
+      if (statsLimitRegular) statsLimitRegular.innerText = maxRegularLimit;
+      if (statsLimitMock) statsLimitMock.innerText = maxMockLimit;
 
       // Count sections for active subjects and count pending sections
       let totalSections = 0;
@@ -1747,29 +1784,27 @@ document.addEventListener('DOMContentLoaded', () => {
         secAllocMap[sa.subjectId.toUpperCase() + "_" + sa.sectionName.toUpperCase()] = sa;
       });
 
-      subjectsInWindow.forEach(sub => {
-        const subDeptCode = getSubjectDeptCode(sub);
-        const sectionsForSub = sections.filter(sec => 
-          Number(sec.yearNumber) === Number(sub.year) && 
-          sec.departmentCode.toUpperCase() === subDeptCode
+      if (selectionWindow && selectionWindow.year && selectionWindow.department) {
+        const activeSections = sections.filter(sec => 
+          Number(sec.yearNumber) === Number(selectionWindow.year) &&
+          sec.departmentCode && sec.departmentCode.toUpperCase() === selectionWindow.department.toUpperCase()
         );
+        
+        totalSections = activeSections.length;
 
-        totalSections += Math.max(1, sectionsForSub.length);
-
-        if (sectionsForSub.length === 0) {
-          const key = sub.id.toUpperCase() + "_N/A";
-          if (!secAllocMap[key]) {
-            pendingSections++;
-          }
-        } else {
-          sectionsForSub.forEach(sec => {
+        activeSections.forEach(sec => {
+          let isSectionFullyAllocated = true;
+          subjectsInWindow.forEach(sub => {
             const key = sub.id.toUpperCase() + "_" + sec.sectionName.toUpperCase();
             if (!secAllocMap[key]) {
-              pendingSections++;
+              isSectionFullyAllocated = false;
             }
           });
-        }
-      });
+          if (!isSectionFullyAllocated) {
+            pendingSections++;
+          }
+        });
+      }
 
       document.getElementById('stats-total-sections').innerText = totalSections;
       document.getElementById('stats-pending-sections').innerText = pendingSections;
@@ -1837,8 +1872,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const facAllocs = allocList.filter(a => a.facultyId.toUpperCase() === facId.toUpperCase() && activeSubjectIds.has(a.subjectId.toUpperCase()));
       const facSecAllocs = secList.filter(sa => sa.facultyId.toUpperCase() === facId.toUpperCase() && activeSubjectIds.has(sa.subjectId.toUpperCase()));
 
-      const hoursLimit = (selectionWindow && selectionWindow.hoursPerWeek) ? selectionWindow.hoursPerWeek : 14;
-      const subjectHours = (selectionWindow && selectionWindow.subjectHoursPerWeek) ? selectionWindow.subjectHoursPerWeek : 4;
+      const workloadLimitInput = document.getElementById('page-hours-limit');
+      const subjectHoursInput = document.getElementById('page-subject-hours');
+      const hoursLimit = (workloadLimitInput && workloadLimitInput.value) ? Number(workloadLimitInput.value) : 0;
+      const subjectHours = (subjectHoursInput && subjectHoursInput.value) ? Number(subjectHoursInput.value) : 0;
 
       const allocatedHours = facSecAllocs.length * subjectHours;
       const uniqueSubjectsCount = facAllocs.length;
@@ -1857,7 +1894,9 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       workloadHoursEl.innerText = `${allocatedHours} / ${hoursLimit}`;
-      subjectsCountEl.innerText = uniqueSubjectsCount;
+      const maxSubjectsInput = document.getElementById('page-max-subjects');
+      const maxSubjectsLimit = (maxSubjectsInput && maxSubjectsInput.value) ? Number(maxSubjectsInput.value) : 0;
+      subjectsCountEl.innerText = `${uniqueSubjectsCount} / ${maxSubjectsLimit}`;
       regularCountEl.innerText = regularCount;
       mockCountEl.innerText = mockCount;
 
@@ -1944,20 +1983,34 @@ document.addEventListener('DOMContentLoaded', () => {
     prefList.innerHTML = '<li><i class="fas fa-spinner fa-spin"></i> Loading choices...</li>';
 
     try {
-      const preferences = await apiRequest(`/faculty/preferences/${facId}`);
+      const [preferences, sectionAllocs, allSubs] = await Promise.all([
+        apiRequest(`/faculty/preferences/${facId}`),
+        apiRequest(`/adminfaculty/section-allocations`),
+        apiRequest('/subject/viewAll')
+      ]);
+
       if (preferences.length === 0) {
         prefList.innerHTML = '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">Faculty hasn\'t selected any subjects.</li>';
       } else {
         prefList.innerHTML = '';
-        const allSubs = await apiRequest('/subject/viewAll');
         const subjectsMap = {};
         allSubs.forEach(s => { subjectsMap[s.id] = s.name; });
+
+        const mySecAllocs = (Array.isArray(sectionAllocs) ? sectionAllocs : [])
+          .filter(sa => sa.facultyId.toUpperCase() === facId.toUpperCase());
 
         preferences.forEach(p => {
           const li = document.createElement('li');
           const subName = subjectsMap[p.subjectId] || 'Unknown Subject';
           const isMock = p.mock === true;
-          li.innerText = `${p.subjectId} - ${subName}${isMock ? ' (Mock)' : ''}`;
+
+          const matchedSecs = mySecAllocs.filter(sa => sa.subjectId.toUpperCase() === p.subjectId.toUpperCase());
+          let secLabel = "";
+          if (matchedSecs.length > 0) {
+            secLabel = ` (Allocated: Sec ${matchedSecs.map(s => s.sectionName).join(', ')})`;
+          }
+
+          li.innerText = `${p.subjectId} - ${subName}${isMock ? ' (Mock)' : ''}${secLabel}`;
           if (isMock) {
             li.style.color = 'var(--primary)';
           }
@@ -2060,41 +2113,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
       tbody.innerHTML = '';
       const validAllocList = allocList.filter(alloc => facultyMap[alloc.facultyId]);
-      if (validAllocList.length === 0) {
+      if (secList.length === 0) {
         tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted);">No subject allocations.</td></tr>`;
         return;
       }
-      validAllocList.forEach(alloc => {
-        const sub = subjectsMap[alloc.subjectId] || { name: 'Unknown Subject' };
-        const facName = facultyMap[alloc.facultyId];
-        
-        const secKey = alloc.facultyId.toUpperCase() + "_" + alloc.subjectId.toUpperCase();
-        const secs = sectionMap[secKey] || [];
-        
-        const secLabel = secs.length > 0 
-          ? secs.map(s => `
-              <span class="badge badge-admin" style="margin-left: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px;">
-                Sec ${s.name} 
-                <i class="fas fa-times" style="cursor: pointer; color: var(--error); font-size: 0.75rem;" onclick="deleteSectionAllocation(${s.id})"></i>
-              </span>`).join('') 
-          : '<span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 6px;">(No Section)</span>';
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><strong>${alloc.facultyId}</strong><br><span style="font-size: 0.85rem; color: var(--text-muted);">${facName}</span></td>
-          <td>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <strong>${alloc.subjectId}</strong>${secLabel}<br>
-                <span style="font-size: 0.85rem; color: var(--text-muted);">${sub.name}</span>
-              </div>
-              <button class="btn btn-danger btn-sm" onclick="deleteSubjectAllocation(${alloc.id})" style="padding: 4px 8px; font-size: 0.75rem;">
-                <i class="fas fa-trash-alt"></i> Delete All
-              </button>
-            </div>
+      const groupedBySection = {};
+      secList.forEach(sa => {
+        const secName = sa.sectionName || 'Unknown Section';
+        if (!groupedBySection[secName]) {
+          groupedBySection[secName] = [];
+        }
+        groupedBySection[secName].push(sa);
+      });
+
+      const sortedSections = Object.keys(groupedBySection).sort();
+      sortedSections.forEach(secName => {
+        const headerTr = document.createElement('tr');
+        headerTr.innerHTML = `
+          <td colspan="2" style="background: rgba(20, 184, 166, 0.15); font-weight: bold; color: var(--secondary); padding: 8px 12px;">
+            <i class="fas fa-folder-open" style="margin-right: 6px;"></i> Section ${secName}
           </td>
         `;
-        tbody.appendChild(tr);
+        tbody.appendChild(headerTr);
+
+        const list = groupedBySection[secName];
+        list.forEach(sa => {
+          const sub = subjectsMap[sa.subjectId] || { name: 'Unknown Subject' };
+          const facName = facultyMap[sa.facultyId] || 'Unknown Faculty';
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${sa.facultyId}</strong><br><span style="font-size: 0.85rem; color: var(--text-muted);">${facName}</span></td>
+            <td>
+              <strong>${sa.subjectId}</strong><br>
+              <span style="font-size: 0.85rem; color: var(--text-muted);">${sub.name}</span>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
       });
 
       const swapSelect1 = document.getElementById('swap-alloc-1');
@@ -2117,13 +2174,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const history = await apiRequest('/adminfaculty/history/all');
         const allocatedIds = new Set();
         (Array.isArray(allocations) ? allocations : []).forEach(a => {
-          if (a.facultyId) {
+          if (a.facultyId && a.subjectId && activeSubjectIds.has(a.subjectId.toUpperCase())) {
             allocatedIds.add(a.facultyId.toUpperCase());
           }
         });
         if (Array.isArray(history)) {
           history.forEach(h => {
-            if (h.facultyId) {
+            if (h.facultyId && h.subjectId && activeSubjectIds.has(h.subjectId.toUpperCase())) {
               allocatedIds.add(h.facultyId.toUpperCase());
             }
           });
@@ -2259,51 +2316,177 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
-  window.autoAllocateSubjects = async function() {
+  function checkAutoAllocateEnable() {
+    const hoursLimitVal = document.getElementById('page-hours-limit') ? document.getElementById('page-hours-limit').value : '';
+    const subjectHoursVal = document.getElementById('page-subject-hours') ? document.getElementById('page-subject-hours').value : '';
+    const maxSubjectsVal = document.getElementById('page-max-subjects') ? document.getElementById('page-max-subjects').value : '';
+    const maxRegularVal = document.getElementById('page-max-regular') ? document.getElementById('page-max-regular').value : '';
+    const maxMockVal = document.getElementById('page-max-mock') ? document.getElementById('page-max-mock').value : '';
+
+    const btn = document.getElementById('auto-allocate-btn');
+    if (btn) {
+      if (hoursLimitVal && subjectHoursVal && maxSubjectsVal && maxRegularVal && maxMockVal) {
+        btn.disabled = false;
+      } else {
+        btn.disabled = true;
+      }
+    }
+  }
+
+  function initAutoAllocationPageInputs() {
+    const inputs = [
+      'page-hours-limit',
+      'page-subject-hours',
+      'page-max-subjects',
+      'page-max-regular',
+      'page-max-mock'
+    ];
+    inputs.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.removeEventListener('input', checkAutoAllocateEnable);
+        el.removeEventListener('change', checkAutoAllocateEnable);
+        el.addEventListener('input', checkAutoAllocateEnable);
+        el.addEventListener('change', checkAutoAllocateEnable);
+
+        const handleInputChange = () => {
+          calculateAllocationStats();
+          const currentFacId = document.getElementById('alloc-faculty-select').value;
+          if (currentFacId) {
+            loadFacultyLoadDetails(currentFacId);
+          }
+        };
+        el.addEventListener('input', handleInputChange);
+        el.addEventListener('change', handleInputChange);
+      }
+    });
+    checkAutoAllocateEnable();
+  }
+
+  async function runAutoAllocationFromPage() {
+    const hoursLimit = document.getElementById('page-hours-limit').value;
+    const subjectHours = document.getElementById('page-subject-hours').value;
+    const maxSubjects = document.getElementById('page-max-subjects').value;
+    const maxRegular = document.getElementById('page-max-regular').value;
+    const maxMock = document.getElementById('page-max-mock').value;
+
+    if (!hoursLimit || !subjectHours || !maxSubjects || !maxRegular || !maxMock) {
+      showToast('Validation Error', 'Please fill in all auto-allocation constraints.', 'warning');
+      return;
+    }
+
+    // Confirm automatic subject allocation
+    const userConfirmed = await new Promise((resolve) => {
+      showConfirm(
+        'Confirm Auto-Allocation',
+        `Are you sure you want to run the automatic subject allocation with the selected settings? This will overwrite any existing non-finalized allocations for the active selection window.`,
+        () => resolve(true)
+      );
+      
+      const overlay = document.getElementById('confirm-modal-overlay');
+      if (overlay) {
+        const cancelBtn = overlay.querySelector('.btn-ghost');
+        const closeBtn = overlay.querySelector('.modal-close');
+        
+        const cleanup = () => {
+          if (cancelBtn) cancelBtn.removeEventListener('click', onCancel);
+          if (closeBtn) closeBtn.removeEventListener('click', onCancel);
+        };
+        
+        const onCancel = () => {
+          cleanup();
+          resolve(false);
+        };
+        
+        if (cancelBtn) cancelBtn.addEventListener('click', onCancel);
+        if (closeBtn) closeBtn.addEventListener('click', onCancel);
+      }
+    });
+
+    if (!userConfirmed) return;
+
+    const autoBtn = document.getElementById('auto-allocate-btn');
+    if (autoBtn) {
+      autoBtn.disabled = true;
+      autoBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Allocating...';
+    }
+
     try {
+      // Check window active state and stop if active
       const windowStatus = await apiRequest('/adminfaculty/deadline');
       let isActiveWindow = windowStatus && windowStatus.active && new Date() < new Date(windowStatus.deadline);
 
-      let confirmMsg = 'Do you want to automatically allocate subjects based on submitted faculty preferences? You can inspect and modify the draft allocations before finalizing.';
+      let proceed = true;
       if (isActiveWindow) {
-        confirmMsg = 'The Selection Window is currently active. Would you like to stop the selection window now and generate draft Auto-Allocations?';
+        proceed = await new Promise((resolve) => {
+          showConfirm('Stop Selection Window', 'The Selection Window is currently active. Would you like to stop the selection window now and proceed with Auto-Allocation?', () => resolve(true));
+          
+          const overlay = document.getElementById('confirm-modal-overlay');
+          if (overlay) {
+            const cancelBtn = overlay.querySelector('.btn-ghost');
+            const closeBtn = overlay.querySelector('.modal-close');
+            const cleanup = () => {
+              if (cancelBtn) cancelBtn.removeEventListener('click', onCancel);
+              if (closeBtn) closeBtn.removeEventListener('click', onCancel);
+            };
+            const onCancel = () => {
+              cleanup();
+              resolve(false);
+            };
+            if (cancelBtn) cancelBtn.addEventListener('click', onCancel);
+            if (closeBtn) closeBtn.addEventListener('click', onCancel);
+          }
+        });
       }
 
-      showConfirm('Auto-Allocate Subjects', confirmMsg, async () => {
-        const autoBtn = document.getElementById('auto-allocate-btn');
+      if (!proceed) {
         if (autoBtn) {
-          autoBtn.disabled = true;
-          autoBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Allocating...';
+          autoBtn.disabled = false;
+          autoBtn.innerHTML = '<i class="fas fa-bolt"></i> Auto-Allocate Subjects';
         }
-        try {
-          if (isActiveWindow) {
-            await apiRequest('/adminfaculty/stop-deadline', { method: 'POST' });
-          }
-          await apiRequest('/adminfaculty/auto-allocate', { method: 'POST' });
-          showToast('Auto-Allocation Complete', 'Draft subject allocations generated based on preferences.', 'success');
-          await loadAllocationWorkspace();
-        } catch (error) {
-          showToast('Auto-Allocation Failed', error.message || 'Could not auto-allocate subjects', 'error');
-        } finally {
-          if (autoBtn) {
-            autoBtn.disabled = false;
-            autoBtn.innerHTML = '<i class="fas fa-bolt"></i> Auto-Allocate Subjects';
-          }
-        }
-      });
-    } catch (err) {
-      showToast('Error', err.message || 'Could not check selection window status', 'error');
+        return;
+      }
+
+      if (isActiveWindow) {
+        await apiRequest('/adminfaculty/stop-deadline', { method: 'POST' });
+        loadDeadlineStatus();
+      }
+
+      // Call auto-allocate endpoint with params
+      const params = new URLSearchParams();
+      params.append('hoursLimit', hoursLimit);
+      params.append('subjectHours', subjectHours);
+      params.append('maxSubjects', maxSubjects);
+      params.append('maxRegular', maxRegular);
+      params.append('maxMock', maxMock);
+
+      await apiRequest(`/adminfaculty/auto-allocate?${params.toString()}`, { method: 'POST' });
+      showToast('Auto-Allocation Complete', 'Draft subject allocations generated based on preferences.', 'success');
+      await loadAllocationWorkspace();
+    } catch (error) {
+      showToast('Auto-Allocation Failed', error.message || 'Could not auto-allocate subjects', 'error');
+    } finally {
+      if (autoBtn) {
+        autoBtn.disabled = false;
+        autoBtn.innerHTML = '<i class="fas fa-bolt"></i> Auto-Allocate Subjects';
+      }
     }
-  };
+  }
+
+  window.runAutoAllocationFromPage = runAutoAllocationFromPage;
+  window.checkAutoAllocateEnable = checkAutoAllocateEnable;
+  window.initAutoAllocationPageInputs = initAutoAllocationPageInputs;
 
   // ----------------------------------------------------
   // ALLOCATION REPORT LOGIC
   // ----------------------------------------------------
   let reportData = [];
+  let rawReportData = [];
 
   function populateReportFilterDropdowns() {
     const deptFilter = document.getElementById('report-dept-select');
     const semFilter = document.getElementById('report-sem-select');
+    const reportYearFilter = document.getElementById('report-year-filter');
 
     if (deptFilter && deptFilter.options.length <= 1) {
       departments.forEach(d => {
@@ -2323,6 +2506,15 @@ document.addEventListener('DOMContentLoaded', () => {
         semFilter.appendChild(opt);
       });
     }
+
+    if (reportYearFilter && reportYearFilter.options.length <= 1) {
+      academicYears.forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = y.yearNumber;
+        opt.innerText = y.name;
+        reportYearFilter.appendChild(opt);
+      });
+    }
   }
 
   function populateCustomDeptDropdown() {
@@ -2330,7 +2522,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!menuEl) return;
     
     menuEl.innerHTML = '';
-    departments.forEach(d => {
+    academicYears.forEach(y => {
       const item = document.createElement('div');
       item.className = 'custom-dept-item';
       item.style.position = 'relative';
@@ -2345,12 +2537,15 @@ document.addEventListener('DOMContentLoaded', () => {
       
       item.innerHTML = `
         <div class="dept-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; pointer-events: none;">
-          <span>${d.code} - ${d.name}</span>
+          <span>${y.name}</span>
           <i class="fas fa-chevron-down" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease;"></i>
         </div>
-        <div class="custom-sem-submenu" style="display: none; justify-content: flex-start; gap: 8px; margin-top: 8px; width: 100%; box-sizing: border-box; padding: 4px 0;">
-          <button class="sem-opt-btn" data-dept="${d.code}" data-sem="1" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border); color: var(--text-main); padding: 6px 12px; text-align: left; font-size: 0.8rem; cursor: pointer; border-radius: var(--border-radius-sm); white-space: nowrap; transition: all 0.2s ease;">Sem 1</button>
-          <button class="sem-opt-btn" data-dept="${d.code}" data-sem="2" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border); color: var(--text-main); padding: 6px 12px; text-align: left; font-size: 0.8rem; cursor: pointer; border-radius: var(--border-radius-sm); white-space: nowrap; transition: all 0.2s ease;">Sem 2</button>
+        <div class="custom-sem-submenu" style="display: none; flex-direction: column; gap: 4px; margin-top: 8px; width: 100%; padding-left: 12px; box-sizing: border-box;">
+          ${semesters.map(s => `
+            <button type="button" class="sem-opt-btn" data-year="${y.yearNumber}" data-sem="${s.semNumber}" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border); border-radius: var(--border-radius-sm); color: var(--text-main); padding: 6px 12px; font-size: 0.82rem; text-align: left; width: 100%; cursor: pointer; transition: all 0.2s ease;">
+              ${s.name}
+            </button>
+          `).join('')}
         </div>
       `;
       
@@ -2387,6 +2582,7 @@ document.addEventListener('DOMContentLoaded', () => {
       menuEl.appendChild(item);
     });
 
+    // Add click and hover listeners to semester buttons
     menuEl.querySelectorAll('.sem-opt-btn').forEach(btn => {
       btn.addEventListener('mouseenter', (e) => {
         e.stopPropagation();
@@ -2401,19 +2597,34 @@ document.addEventListener('DOMContentLoaded', () => {
       
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const deptCode = btn.getAttribute('data-dept');
+        const yearVal = btn.getAttribute('data-year');
         const semVal = btn.getAttribute('data-sem');
         
-        document.getElementById('report-dept-select').value = deptCode;
-        document.getElementById('report-sem-select').value = semVal;
+        // Update hidden native selects
+        const yearSelect = document.getElementById('report-year-filter');
+        const semSelect = document.getElementById('report-sem-select');
+        if (yearSelect) {
+          yearSelect.value = yearVal;
+          yearSelect.dispatchEvent(new Event('change'));
+        }
+        if (semSelect) {
+          semSelect.value = semVal;
+          semSelect.dispatchEvent(new Event('change'));
+        }
         
+        // Update trigger button text
+        const yearObj = academicYears.find(y => String(y.yearNumber) === String(yearVal));
+        const yearName = yearObj ? yearObj.name : `${yearVal} Year`;
         const triggerLabel = document.getElementById('custom-dept-trigger-label');
         if (triggerLabel) {
-          triggerLabel.innerText = `${deptCode} - Sem ${semVal}`;
+          triggerLabel.innerText = `${yearName} - Sem ${semVal}`;
           triggerLabel.style.color = 'var(--text-main)';
         }
         
-        menuEl.style.display = 'none';
+        // Hide dropdown
+        const dropdownMenu = document.getElementById('custom-dept-menu');
+        if (dropdownMenu) dropdownMenu.style.display = 'none';
+        
         loadReportData();
       });
     });
@@ -2425,20 +2636,58 @@ document.addEventListener('DOMContentLoaded', () => {
       tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">Please enter Academic Year, select Department, and select Semester to view the report.</td></tr>`;
     }
     
-    document.getElementById('report-dept-select').value = '';
-    document.getElementById('report-sem-select').value = '';
-    
-    const triggerLabel = document.getElementById('custom-dept-trigger-label');
-    if (triggerLabel) {
-      triggerLabel.innerText = 'Select Dept & Sem';
-      triggerLabel.style.color = 'var(--text-muted)';
-    }
-    
     if (departments.length === 0 || semesters.length === 0) {
       await loadConfigOptions();
     }
     populateReportFilterDropdowns();
-    populateCustomDeptDropdown();
+
+    // Fetch the active selection window if not loaded
+    if (!selectionWindow) {
+      try {
+        selectionWindow = await apiRequest('/adminfaculty/deadline');
+      } catch (e) {
+        console.error('Error fetching selection window for report:', e);
+      }
+    }
+
+    const academicYearInput = document.getElementById('report-academic-year-input');
+    const deptSelect = document.getElementById('report-dept-select');
+    const semSelect = document.getElementById('report-sem-select');
+
+    if (selectionWindow) {
+      if (academicYearInput && selectionWindow.academicYear) {
+        academicYearInput.value = selectionWindow.academicYear;
+      }
+      if (deptSelect && selectionWindow.department) {
+        deptSelect.value = selectionWindow.department;
+      }
+      if (semSelect && selectionWindow.sem) {
+        semSelect.value = selectionWindow.sem;
+      }
+    }
+
+    const reportSemSelect = document.getElementById('report-sem-select');
+    if (reportSemSelect) {
+      reportSemSelect.removeEventListener('change', loadReportData);
+      reportSemSelect.addEventListener('change', loadReportData);
+    }
+    
+    const reportDeptSelect = document.getElementById('report-dept-select');
+    if (reportDeptSelect) {
+      reportDeptSelect.removeEventListener('change', loadReportData);
+      reportDeptSelect.addEventListener('change', loadReportData);
+    }
+
+    const reportAcadYearInput = document.getElementById('report-academic-year-input');
+    if (reportAcadYearInput) {
+      reportAcadYearInput.removeEventListener('change', loadReportData);
+      reportAcadYearInput.addEventListener('change', loadReportData);
+    }
+
+    // Automatically trigger loadReportData if we have the values pre-populated
+    if (academicYearInput && academicYearInput.value && deptSelect && deptSelect.value && semSelect && semSelect.value) {
+      loadReportData();
+    }
   }
 
   async function loadReportData() {
@@ -2460,9 +2709,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const data = await apiRequest(`/superadmin/reports/allocations?academicYear=${encodeURIComponent(academicYearVal)}`);
-      let fetchedReportData = Array.isArray(data) ? data : [];
+      rawReportData = Array.isArray(data) ? data : [];
 
-      reportData = fetchedReportData.map(fac => {
+      reportData = rawReportData.map(fac => {
         const filteredAllocations = (fac.allocations || []).filter(a => {
           const matchDept = a.department && a.department.toUpperCase() === deptVal.toUpperCase();
           const matchSem = a.semester && Number(a.semester) === Number(semVal);
@@ -2496,6 +2745,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     list.forEach(fac => {
       const tr = document.createElement('tr');
+      const isUnknown = fac.isUnknown === true;
+      if (isUnknown) {
+        tr.style.background = 'rgba(239, 68, 68, 0.05)';
+        tr.style.borderLeft = '4px solid var(--error)';
+      }
       
       const yearAllocs = { 1: [], 2: [], 3: [], 4: [] };
       if (fac.allocations && fac.allocations.length > 0) {
@@ -2510,27 +2764,38 @@ document.addEventListener('DOMContentLoaded', () => {
       const renderYearCell = (allocs) => {
         if (!allocs || allocs.length === 0) return '<span style="color: var(--text-disabled);">-</span>';
         
-        const chunks = [];
-        for (let i = 0; i < allocs.length; i += 3) {
-          chunks.push(allocs.slice(i, i + 3));
-        }
+        return allocs.map(a => {
+          const secSuffix = a.sectionName && a.sectionName !== 'N/A' ? `-${a.sectionName}` : '';
+          const badgeText = `${a.subjectName || ''}${secSuffix}`;
+          const badgeBg = isUnknown ? 'rgba(239, 68, 68, 0.12)' : 'rgba(20, 184, 166, 0.08)';
+          const badgeBorder = isUnknown ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(20, 184, 166, 0.2)';
+          const textStyle = isUnknown ? 'color: var(--error);' : 'color: var(--text-main);';
 
-        return chunks.map(chunk => {
-          const rowHtml = chunk.map(a => {
-            const secName = a.sectionName && a.sectionName !== 'N/A' ? ` - Sec ${a.sectionName}` : '';
-            return `
-              <div class="allocation-badge" style="background: rgba(20, 184, 166, 0.08); border: 1px solid rgba(20, 184, 166, 0.2); border-radius: 4px; padding: 4px 10px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; max-width: calc(33.33% - 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                <span style="color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${a.subjectName || ''} <code style="color: var(--text-muted); font-size: 0.78rem;">(${a.subjectId || ''}${secName})</code></span>
-              </div>
-            `;
-          }).join('');
-          return `<div style="display: flex; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">${rowHtml}</div>`;
+          return `
+            <div class="allocation-badge" style="background: ${badgeBg}; border: ${badgeBorder}; border-radius: 4px; padding: 4px 10px; font-size: 0.85rem; display: block; margin-bottom: 6px; white-space: nowrap; width: fit-content; max-width: 100%; overflow: hidden; text-overflow: ellipsis;">
+              <span style="${textStyle}">${badgeText}</span>
+            </div>
+          `;
         }).join('');
       };
 
+      const facultyIdHtml = isUnknown 
+        ? `<strong style="color: var(--error);"><i class="fas fa-exclamation-triangle" style="margin-right: 6px;"></i>${fac.facultyId}</strong>` 
+        : `<strong>${fac.facultyId}</strong>`;
+        
+      const editBtnHtml = `
+        <button onclick="openFacultyAllocationsEditModal('${fac.facultyId}', '${fac.name.replace(/'/g, "\\'")}', ${isUnknown})" style="background: none; border: none; padding: 4px 8px; margin-left: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--secondary);" title="Edit Faculty Allocations">
+          <i class="${isUnknown ? 'fas fa-user-plus' : 'fas fa-edit'}" style="font-size: 0.95rem; color: ${isUnknown ? 'var(--error)' : 'var(--secondary)'};"></i>
+        </button>
+      `;
+
+      const facultyNameHtml = isUnknown 
+        ? `<span style="color: var(--error); font-weight: 500;">${fac.name} (Pending Hire)</span>${editBtnHtml}` 
+        : `<span>${fac.name}</span>${editBtnHtml}`;
+
       tr.innerHTML = `
-        <td><strong>${fac.facultyId}</strong></td>
-        <td>${fac.name}</td>
+        <td>${facultyIdHtml}</td>
+        <td>${facultyNameHtml}</td>
         <td>${renderYearCell(yearAllocs[1])}</td>
         <td>${renderYearCell(yearAllocs[2])}</td>
         <td>${renderYearCell(yearAllocs[3])}</td>
@@ -2558,6 +2823,159 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     renderReportTable(filtered);
   });
+
+  let activeEditFacultyId = null;
+  let activeEditFacultyName = null;
+  let activeEditFacultyIsUnknown = false;
+
+  window.openFacultyAllocationsEditModal = function(facultyId, facultyName, isUnknown) {
+    activeEditFacultyId = facultyId;
+    activeEditFacultyName = facultyName;
+    activeEditFacultyIsUnknown = isUnknown;
+
+    document.getElementById('fac-edit-name-info').innerText = facultyName;
+    document.getElementById('fac-edit-id-info').innerText = facultyId;
+
+    const listEl = document.getElementById('fac-allocs-list');
+    listEl.innerHTML = '';
+
+    const fac = rawReportData.find(x => x.facultyId && String(x.facultyId).toUpperCase() === String(facultyId).toUpperCase());
+    if (!fac || !fac.allocations || fac.allocations.length === 0) {
+      listEl.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">No active allocations for this faculty.</div>';
+      // Open Modal
+      document.getElementById('faculty-edit-modal-overlay').classList.add('active');
+      return;
+    }
+
+    fac.allocations.forEach(a => {
+      const div = document.createElement('div');
+      div.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px 16px; gap: 12px;";
+
+      const infoSpan = document.createElement('span');
+      const secText = a.sectionName && a.sectionName !== 'N/A' ? ` - Sec ${a.sectionName}` : '';
+      infoSpan.innerHTML = `<strong style="color: var(--text-main);">${a.subjectName}</strong>${secText} <span style="color: var(--text-muted); font-size: 0.82rem; margin-left: 8px;">(Year ${a.year})</span>`;
+
+      const actionArea = document.createElement('div');
+      actionArea.style.cssText = "display: flex; gap: 8px; align-items: center;";
+
+      const reassignBtn = document.createElement('button');
+      reassignBtn.className = "btn btn-primary btn-sm";
+      reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
+      reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
+      reassignBtn.onclick = () => showInlineReassignDropdown(actionArea, a.subjectId, a.subjectName, a.sectionName, facultyId);
+
+      actionArea.appendChild(reassignBtn);
+      div.appendChild(infoSpan);
+      div.appendChild(actionArea);
+      listEl.appendChild(div);
+    });
+
+    // Open Modal
+    document.getElementById('faculty-edit-modal-overlay').classList.add('active');
+  };
+
+  window.closeFacultyEditModal = function() {
+    document.getElementById('faculty-edit-modal-overlay').classList.remove('active');
+    activeEditFacultyId = null;
+    activeEditFacultyName = null;
+    activeEditFacultyIsUnknown = false;
+  };
+
+  async function showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId) {
+    container.innerHTML = '<i class="fas fa-spinner fa-spin" style="color: var(--secondary); margin-right: 12px;"></i>';
+    try {
+      const eligibleList = await apiRequest(`/adminfaculty/reassign-eligible-faculty?subjectId=${encodeURIComponent(subjectId)}&sectionName=${encodeURIComponent(sectionName)}`);
+      
+      container.innerHTML = '';
+      const select = document.createElement('select');
+      select.className = 'form-control';
+      select.style.cssText = "height: 32px; font-size: 0.85rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 4px 8px; width: 180px;";
+
+      if (!eligibleList || eligibleList.length === 0) {
+        const opt = document.createElement('option');
+        opt.text = "No eligible faculty";
+        opt.disabled = true;
+        select.appendChild(opt);
+        container.appendChild(select);
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = "btn btn-ghost btn-sm";
+        cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+        cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
+        cancelBtn.onclick = () => restoreReassignBtn();
+        container.appendChild(cancelBtn);
+      } else {
+        const optDefault = document.createElement('option');
+        optDefault.text = "Select Faculty";
+        optDefault.value = "";
+        optDefault.disabled = true;
+        optDefault.selected = true;
+        select.appendChild(optDefault);
+
+        eligibleList.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f.id;
+          opt.text = `${f.name} (${f.id})`;
+          select.appendChild(opt);
+        });
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = "btn btn-primary btn-sm";
+        saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+        saveBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px;";
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = "btn btn-ghost btn-sm";
+        cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+        cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
+        cancelBtn.onclick = () => restoreReassignBtn();
+
+        saveBtn.onclick = async () => {
+          const toFacultyId = select.value;
+          if (!toFacultyId) {
+            showToast('Validation Error', 'Please select a faculty member.', 'error');
+            return;
+          }
+
+          saveBtn.disabled = true;
+          saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+          try {
+            await apiRequest(`/adminfaculty/reassign-allocation?subjectId=${encodeURIComponent(subjectId)}&sectionName=${encodeURIComponent(sectionName)}&fromFacultyId=${encodeURIComponent(fromFacultyId)}&toFacultyId=${encodeURIComponent(toFacultyId)}`, {
+              method: 'POST'
+            });
+            showToast('Success', 'Allocation reassigned successfully!', 'success');
+
+            // Refresh parent report data first
+            await loadReportData();
+            // Refresh modal list view
+            openFacultyAllocationsEditModal(activeEditFacultyId, activeEditFacultyName, activeEditFacultyIsUnknown);
+          } catch (err) {
+            showToast('Reassignment Failed', err.message || 'Could not reassign', 'error');
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+          }
+        };
+
+        container.appendChild(select);
+        container.appendChild(saveBtn);
+        container.appendChild(cancelBtn);
+      }
+
+      function restoreReassignBtn() {
+        container.innerHTML = '';
+        const reassignBtn = document.createElement('button');
+        reassignBtn.className = "btn btn-primary btn-sm";
+        reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
+        reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
+        reassignBtn.onclick = () => showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId);
+        container.appendChild(reassignBtn);
+      }
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = '<span style="color: var(--error); font-size: 0.85rem;">Error loading</span>';
+    }
+  }
 
   window.exportReportToExcel = function() {
     const academicYearInput = document.getElementById('report-academic-year-input');
@@ -2688,6 +3106,58 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function finalizeAllAllocations() {
+    const userConfirmed = await new Promise((resolve) => {
+      showConfirm(
+        'Finalize & Publish Allocations',
+        'Are you sure you want to finalize and publish all current draft subject and section allocations? Once finalized, allocations will become visible to faculty members and cannot be changed.',
+        () => resolve(true)
+      );
+
+      const overlay = document.getElementById('confirm-modal-overlay');
+      if (overlay) {
+        const cancelBtn = overlay.querySelector('.btn-ghost');
+        const closeBtn = overlay.querySelector('.modal-close');
+
+        const cleanup = () => {
+          if (cancelBtn) cancelBtn.removeEventListener('click', onCancel);
+          if (closeBtn) closeBtn.removeEventListener('click', onCancel);
+        };
+
+        const onCancel = () => {
+          cleanup();
+          resolve(false);
+        };
+
+        if (cancelBtn) cancelBtn.addEventListener('click', onCancel);
+        if (closeBtn) closeBtn.addEventListener('click', onCancel);
+      }
+    });
+
+    if (!userConfirmed) return;
+
+    const btn = document.getElementById('finalize-allocations-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Finalizing...';
+    }
+
+    try {
+      await apiRequest('/adminfaculty/finalize-allocations', { method: 'POST' });
+      showToast('Allocations Finalized', 'All subject allocations have been finalized and published.', 'success');
+      await updateFinalizationStatus();
+      await loadAllocationWorkspace();
+    } catch (error) {
+      showToast('Finalization Failed', error.message || 'Could not finalize allocations', 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check-double"></i> Finalize Allocations';
+      }
+    }
+  }
+
+  window.finalizeAllAllocations = finalizeAllAllocations;
+
   // ----------------------------------------------------
   // PROFILE UPDATE
   // ----------------------------------------------------
@@ -2767,6 +3237,17 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('No Preferences', 'No preferences found to export', 'warning');
       return;
     }
+
+    // Slice each faculty's preferences list to active selection window limits
+    const maxRegLimit = (selectionWindow && selectionWindow.maxRegularPreferences) ? Number(selectionWindow.maxRegularPreferences) : 5;
+    const maxMockLimit = (selectionWindow && selectionWindow.maxMockPreferences) ? Number(selectionWindow.maxMockPreferences) : 2;
+
+    facultyOrder.forEach(facId => {
+      const list = grouped[facId] || [];
+      const normal = list.filter(p => p.mock !== true).slice(0, maxRegLimit);
+      const mock = list.filter(p => p.mock === true).slice(0, maxMockLimit);
+      grouped[facId] = [...normal, ...mock];
+    });
 
     // Find the maximum number of preferences selected by any faculty
     let maxPrefsCount = 0;
@@ -2857,7 +3338,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // Custom dropdown trigger for selections dept/sem filter
-  const customPrefDropdown = document.getElementById('custom-pref-dept-dropdown');
+  const customPrefDropdown = document.getElementById('custom-pref-dropdown');
   if (customPrefDropdown) {
     const triggerBtn = customPrefDropdown.querySelector('.custom-dropdown-trigger');
     const menuEl = customPrefDropdown.querySelector('.custom-dropdown-menu');

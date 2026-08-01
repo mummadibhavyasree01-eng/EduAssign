@@ -12,4 +12,5 @@ public interface AllocationHistoryRepository extends JpaRepository<AllocationHis
     List<AllocationHistory> findByAcademicYear(String academicYear);
     List<AllocationHistory> findByFacultyIdAndSubjectId(String facultyId, String subjectId);
     List<AllocationHistory> findByDepartmentAndAcademicYear(String department, String academicYear);
+    List<AllocationHistory> findByAcademicYearAndDepartmentAndSemester(String academicYear, String department, Integer semester);
 }

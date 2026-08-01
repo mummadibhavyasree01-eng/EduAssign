@@ -93,24 +93,29 @@
               </div>
             </div>
             
-            <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 500px;">
+            <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 700px;">
               <div style="flex: 1; max-width: 220px;">
                 <input type="text" id="pref-academic-year-input" class="form-control" placeholder="Academic Year (e.g. 2026-27)" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
               </div>
+              <div style="flex: 1; max-width: 180px;">
+                <select id="pref-dept-filter" class="form-control" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
+                  <option value="" disabled selected>Select Dept</option>
+                </select>
+              </div>
               <div style="flex: 1; max-width: 220px; position: relative;">
-                <div id="custom-pref-dept-dropdown" class="custom-dropdown" style="width: 100%;">
+                <div id="custom-pref-dropdown" class="custom-dropdown" style="width: 100%;">
                   <div class="custom-dropdown-trigger" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
-                    <span id="custom-pref-trigger-label" style="color: var(--text-muted);">Select Dept & Sem</span>
+                    <span id="custom-pref-trigger-label" style="color: var(--text-muted);">Select Year & Sem</span>
                     <i class="fas fa-chevron-down" style="font-size: 0.8rem; color: var(--text-muted);"></i>
                   </div>
-                  <div id="custom-pref-dept-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+                  <div id="custom-pref-year-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
                     <!-- Populated dynamically via JS -->
                   </div>
                 </div>
               </div>
               <!-- Hidden native selects to retain full compatibility -->
-              <select id="pref-dept-filter" style="display: none;">
-                <option value="" disabled selected>Select Department</option>
+              <select id="pref-year-filter" style="display: none;">
+                <option value="" disabled selected>Select Year</option>
               </select>
               <select id="pref-sem-filter" style="display: none;">
                 <option value="" disabled selected>Select Semester</option>
@@ -399,18 +404,6 @@
                   </select>
                 </div>
                 <div class="form-group">
-                  <label for="deadline-hours-per-week">Faculty Hours Limit/Week</label>
-                  <input type="number" id="deadline-hours-per-week" class="form-control" min="1" max="40" value="16" required>
-                </div>
-                <div class="form-group">
-                  <label for="deadline-max-subjects">Max Subjects/Faculty</label>
-                  <input type="number" id="deadline-max-subjects" class="form-control" min="1" max="10" value="2" required>
-                </div>
-                <div class="form-group">
-                  <label for="deadline-subject-hours">Hours/Week per Subject</label>
-                  <input type="number" id="deadline-subject-hours" class="form-control" min="1" max="10" value="4" required>
-                </div>
-                <div class="form-group">
                   <label for="deadline-max-regular-pref">Max Regular Choices</label>
                   <input type="number" id="deadline-max-regular-pref" class="form-control" min="1" max="20" value="5" required>
                 </div>
@@ -464,13 +457,42 @@
             <p style="font-size: 0.88rem; color: var(--text-muted);">Automatically generate draft allocations based on preferences, review/modify manually, then finalize.</p>
           </div>
           <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-            <button class="btn btn-primary" id="auto-allocate-btn" onclick="autoAllocateSubjects()">
-              <i class="fas fa-bolt"></i> Auto-Allocate Subjects
-            </button>
             <span class="status-badge" id="finalize-status-badge" style="padding: 8px 16px; font-size: 0.85rem;">Draft Mode</span>
             <button class="btn btn-secondary" id="finalize-allocations-btn" onclick="finalizeAllAllocations()">
               <i class="fas fa-check-double"></i> Finalize Allocations
             </button>
+          </div>
+        </div>
+
+        <!-- Auto-Allocation Settings & Queries Panel -->
+        <div class="glass-panel section-container" style="margin-bottom: 20px; padding: 20px;">
+          <h4 style="margin-bottom: 15px; color: var(--secondary);"><i class="fas fa-sliders-h"></i> Auto-Allocation Constraints & Queries</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: flex-end;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="page-hours-limit" style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Faculty Hours Limit / Week</label>
+              <input type="number" id="page-hours-limit" class="form-control" min="1" max="60" placeholder="e.g. 14" style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); color: var(--text-main); height: 38px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="page-subject-hours" style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Hours / Week per Subject</label>
+              <input type="number" id="page-subject-hours" class="form-control" min="1" max="20" placeholder="e.g. 4" style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); color: var(--text-main); height: 38px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="page-max-subjects" style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Total Max Subjects / Faculty</label>
+              <input type="number" id="page-max-subjects" class="form-control" min="1" max="10" placeholder="e.g. 3" style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); color: var(--text-main); height: 38px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="page-max-regular" style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Max Regular Subjects / Faculty</label>
+              <input type="number" id="page-max-regular" class="form-control" min="0" max="10" placeholder="e.g. 2" style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); color: var(--text-main); height: 38px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="page-max-mock" style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Max Mock Subjects / Faculty</label>
+              <input type="number" id="page-max-mock" class="form-control" min="0" max="10" placeholder="e.g. 1" style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); color: var(--text-main); height: 38px;">
+            </div>
+            <div>
+              <button class="btn btn-primary btn-block" id="auto-allocate-btn" onclick="runAutoAllocationFromPage()" disabled style="height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fas fa-bolt"></i> Auto-Allocate Subjects
+              </button>
+            </div>
           </div>
         </div>
 
@@ -491,8 +513,8 @@
               <strong id="stats-allocated-subjects" style="font-size: 1.4rem; color: var(--text-main);">0</strong>
             </div>
             <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; text-align: center;">
-              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Regular / Mock</span>
-              <span style="font-size: 1.1rem; font-weight: bold; color: var(--text-main); display: block; margin-top: 4px;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Allocated (Reg / MOOC)</span>
+              <span style="font-size: 1.15rem; font-weight: bold; color: var(--text-main); display: block; margin-top: 4px;">
                 <span id="stats-allocated-regular" style="color: var(--secondary);">0</span> / <span id="stats-allocated-mock" style="color: var(--primary);">0</span>
               </span>
             </div>
@@ -503,7 +525,13 @@
             <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; text-align: center;">
               <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Faculty Load Limits</span>
               <span style="font-size: 0.85rem; color: var(--text-main); display: block; margin-top: 8px;">
-                Max: <strong id="stats-workload-limit">14</strong>h | Sub: <strong id="stats-subject-hours">4</strong>h
+                Max: <strong id="stats-workload-limit">0</strong>h | Sub: <strong id="stats-subject-hours">0</strong>h
+              </span>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; text-align: center;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Faculty Subject Limits</span>
+              <span style="font-size: 0.85rem; color: var(--text-main); display: block; margin-top: 8px;">
+                Total: <strong id="stats-limit-total" style="color: var(--text-main);">0</strong> | Reg: <strong id="stats-limit-regular" style="color: var(--secondary);">0</strong> | MOOC: <strong id="stats-limit-mock" style="color: var(--primary);">0</strong>
               </span>
             </div>
           </div>
@@ -540,8 +568,8 @@
               <div id="selected-faculty-load-details" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px; margin-bottom: 20px; font-size: 0.85rem;">
                 <h5 style="margin-bottom: 8px; color: var(--secondary); font-size: 0.82rem; text-transform: uppercase;">Faculty Load Profile:</h5>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                  <div>Workload: <strong id="load-workload-hours">0/14</strong> hrs</div>
-                  <div>Subjects: <strong id="load-subjects-count">0</strong>/3</div>
+                  <div>Workload: <strong id="load-workload-hours">0 / 0</strong> hrs</div>
+                  <div>Subjects: <strong id="load-subjects-count">0 / 0</strong></div>
                   <div>Regular: <strong id="load-regular-count">0</strong></div>
                   <div>Mock: <strong id="load-mock-count">0</strong></div>
                 </div>
@@ -634,28 +662,20 @@
             </div>
           </div>
 
-          <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 500px;">
+          <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 700px;">
             <div style="flex: 1; max-width: 220px;">
               <input type="text" id="report-academic-year-input" class="form-control" placeholder="Academic Year (e.g. 2026-27)" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
             </div>
-            <div style="flex: 1; max-width: 220px; position: relative;">
-              <div id="custom-dept-dropdown" class="custom-dropdown" style="width: 100%;">
-                <div class="custom-dropdown-trigger" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
-                  <span id="custom-dept-trigger-label" style="color: var(--text-muted);">Select Dept & Sem</span>
-                  <i class="fas fa-chevron-down" style="font-size: 0.8rem; color: var(--text-muted);"></i>
-                </div>
-                <div id="custom-dept-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
-                  <!-- Populated dynamically via JS -->
-                </div>
-              </div>
+            <div style="flex: 1; max-width: 180px;">
+              <select id="report-dept-select" class="form-control" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
+                <option value="" disabled selected>Select Dept</option>
+              </select>
             </div>
-            <!-- Hidden native selects to retain full compatibility -->
-            <select id="report-dept-select" style="display: none;">
-              <option value="" disabled selected>Select Department</option>
-            </select>
-            <select id="report-sem-select" style="display: none;">
-              <option value="" disabled selected>Select Semester</option>
-            </select>
+            <div style="flex: 1; max-width: 180px;">
+              <select id="report-sem-select" class="form-control" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
+                <option value="" disabled selected>Select Semester</option>
+              </select>
+            </div>
           </div>
           
           <div class="search-bar-wrapper" style="margin-bottom: 20px; position: relative;">
@@ -808,8 +828,31 @@
     </div>
   </div>
 
+  <!-- Faculty Allocations Edit Modal -->
+  <div class="modal-overlay" id="faculty-edit-modal-overlay">
+    <div class="modal-container glass-panel" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fas fa-user-edit" style="color: var(--secondary); margin-right: 8px;"></i> Edit Faculty Allocations</h3>
+        <button class="modal-close" onclick="closeFacultyEditModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="faculty-edit-modal-body">
+        <p style="margin-top: 0; font-size: 0.95rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
+          Managing allocations for <strong id="fac-edit-name-info" style="color: var(--text-main);">Faculty Name</strong> 
+          (<span id="fac-edit-id-info" style="color: var(--secondary);">ID</span>):
+        </p>
+        
+        <div id="fac-allocs-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; padding-right: 8px;">
+          <!-- Populated dynamically: List of subject allocations with a reassign action -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeFacultyEditModal()" style="height: 38px; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 8px 16px; background: transparent; color: var(--text-main); cursor: pointer;">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
-  <script src="js/common.js"></script>
-  <script src="js/admin.js?v=2"></script>
+  <script src="js/common.js?v=6"></script>
+  <script src="js/admin.js?v=6"></script>
 </body>
 </html>

@@ -162,28 +162,20 @@
             </div>
           </div>
 
-          <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 500px;">
+          <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 700px;">
             <div style="flex: 1; max-width: 220px;">
               <input type="text" id="report-academic-year-input" class="form-control" placeholder="Academic Year (e.g. 2026-27)" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
             </div>
-            <div style="flex: 1; max-width: 220px; position: relative;">
-              <div id="custom-dept-dropdown" class="custom-dropdown" style="width: 100%;">
-                <div class="custom-dropdown-trigger" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
-                  <span id="custom-dept-trigger-label" style="color: var(--text-muted);">Select Dept & Sem</span>
-                  <i class="fas fa-chevron-down" style="font-size: 0.8rem; color: var(--text-muted);"></i>
-                </div>
-                <div id="custom-dept-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
-                  <!-- Populated dynamically via JS -->
-                </div>
-              </div>
+            <div style="flex: 1; max-width: 180px;">
+              <select id="report-dept-select" class="form-control" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
+                <option value="" disabled selected>Select Department</option>
+              </select>
             </div>
-            <!-- Hidden native selects to retain full compatibility -->
-            <select id="report-dept-select" style="display: none;">
-              <option value="" disabled selected>Select Department</option>
-            </select>
-            <select id="report-sem-select" style="display: none;">
-              <option value="" disabled selected>Select Semester</option>
-            </select>
+            <div style="flex: 1; max-width: 180px;">
+              <select id="report-sem-select" class="form-control" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px; width: 100%;">
+                <option value="" disabled selected>Select Semester</option>
+              </select>
+            </div>
           </div>
           
           <div class="search-bar-wrapper" style="margin-bottom: 20px; position: relative;">
@@ -280,8 +272,31 @@
     </div>
   </div>
 
+  <!-- Faculty Allocations Edit Modal -->
+  <div class="modal-overlay" id="faculty-edit-modal-overlay">
+    <div class="modal-container glass-panel" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fas fa-user-edit" style="color: var(--secondary); margin-right: 8px;"></i> Edit Faculty Allocations</h3>
+        <button class="modal-close" onclick="closeFacultyEditModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="faculty-edit-modal-body">
+        <p style="margin-top: 0; font-size: 0.95rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
+          Managing allocations for <strong id="fac-edit-name-info" style="color: var(--text-main);">Faculty Name</strong> 
+          (<span id="fac-edit-id-info" style="color: var(--secondary);">ID</span>):
+        </p>
+        
+        <div id="fac-allocs-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; padding-right: 8px;">
+          <!-- Populated dynamically: List of subject allocations with a reassign action -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeFacultyEditModal()" style="height: 38px; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 8px 16px; background: transparent; color: var(--text-main); cursor: pointer;">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
-  <script src="js/common.js"></script>
-  <script src="js/superadmin.js?v=3"></script>
+  <script src="js/common.js?v=6"></script>
+  <script src="js/superadmin.js?v=6"></script>
 </body>
 </html>

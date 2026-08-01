@@ -273,9 +273,17 @@ public class AdminController {
 	    }
 
 	    @PostMapping("/auto-allocate")
-	    public ResponseEntity<?> autoAllocateSubjects() {
+	    public ResponseEntity<?> autoAllocateSubjects(
+	            @RequestParam(required = false) Integer hoursLimit,
+	            @RequestParam(required = false) Integer subjectHours,
+	            @RequestParam(required = false) Integer maxSubjects,
+	            @RequestParam(required = false) Integer maxRegular,
+	            @RequestParam(required = false) Integer maxMock,
+	            @RequestParam(required = false) String academicYear,
+	            @RequestParam(required = false) String department,
+	            @RequestParam(required = false) Integer sem) {
 	        try {
-	            return ResponseEntity.ok(subjectService.autoAllocateSubjects());
+	            return ResponseEntity.ok(subjectService.autoAllocateSubjects(hoursLimit, subjectHours, maxSubjects, maxRegular, maxMock, academicYear, department, sem));
 	        } catch (IllegalStateException e) {
 	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
 	        } catch (Exception e) {
@@ -296,6 +304,32 @@ public class AdminController {
 	    @GetMapping("/history/all")
 	    public ResponseEntity<?> getAllAllocationHistory() {
 	        return ResponseEntity.ok(subjectService.getAllHistory());
+	    }
+
+	    @PostMapping("/reassign-allocation")
+	    public ResponseEntity<?> reassignAllocation(
+	            @RequestParam String subjectId,
+	            @RequestParam String sectionName,
+	            @RequestParam String fromFacultyId,
+	            @RequestParam String toFacultyId) {
+	        try {
+	            subjectService.reassignSectionAllocation(subjectId, sectionName, fromFacultyId, toFacultyId);
+	            return ResponseEntity.ok(Map.of("message", "Allocation reassigned successfully"));
+	        } catch (Exception e) {
+	            return ResponseEntity.badRequest().body(e.getMessage());
+	        }
+	    }
+
+	    @GetMapping("/reassign-eligible-faculty")
+	    public ResponseEntity<?> getEligibleFacultyForReassignment(
+	            @RequestParam String subjectId,
+	            @RequestParam String sectionName) {
+	        try {
+	            List<AdminFaculty> eligible = subjectService.getEligibleFacultyForReassignment(subjectId, sectionName);
+	            return ResponseEntity.ok(eligible);
+	        } catch (Exception e) {
+	            return ResponseEntity.badRequest().body(e.getMessage());
+	        }
 	    }
 }
 

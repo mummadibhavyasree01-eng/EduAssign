@@ -253,6 +253,116 @@ public class SuperAdminController {
             report.add(facData);
         }
 
+        // 4. Gather virtual unknown faculty members
+        java.util.Set<String> unknownFacultyIds = new java.util.TreeSet<>();
+        for (AllocationHistory h : historyList) {
+            if (h.getFacultyId() != null && h.getFacultyId().toUpperCase().startsWith("UNKNOWN_")) {
+                unknownFacultyIds.add(h.getFacultyId());
+            }
+        }
+        for (SectionAllocation sa : activeSecAllocs) {
+            if (sa.getFacultyId() != null && sa.getFacultyId().toUpperCase().startsWith("UNKNOWN_")) {
+                Subject sub = sa.getSubjectId() != null ? subjectMap.get(sa.getSubjectId().toLowerCase()) : null;
+                if (sub != null && sub.getAcademicYear() != null && sub.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                    unknownFacultyIds.add(sa.getFacultyId());
+                }
+            }
+        }
+        for (SubjectAllocation sa : activeSubAllocs) {
+            if (sa.getFacultyId() != null && sa.getFacultyId().toUpperCase().startsWith("UNKNOWN_")) {
+                Subject sub = sa.getSubjectId() != null ? subjectMap.get(sa.getSubjectId().toLowerCase()) : null;
+                if (sub != null && sub.getAcademicYear() != null && sub.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                    unknownFacultyIds.add(sa.getFacultyId());
+                }
+            }
+        }
+
+        // Process allocations for each virtual unknown faculty
+        for (String unknownId : unknownFacultyIds) {
+            Map<String, Object> facData = new HashMap<>();
+            facData.put("facultyId", unknownId);
+            facData.put("name", "Unknown Faculty " + unknownId.substring(8));
+            facData.put("email", "N/A");
+            facData.put("isUnknown", true);
+
+            Map<String, Map<String, Object>> allocMap = new LinkedHashMap<>();
+
+            // 1. Historical allocations
+            for (AllocationHistory h : historyList) {
+                if (h.getFacultyId() != null && h.getFacultyId().equalsIgnoreCase(unknownId)) {
+                    Map<String, Object> alloc = new HashMap<>();
+                    alloc.put("subjectId", h.getSubjectId());
+                    Subject sub = h.getSubjectId() != null ? subjectMap.get(h.getSubjectId().toLowerCase()) : null;
+                    alloc.put("subjectName", sub != null ? sub.getName() : "Unknown Subject");
+                    alloc.put("department", h.getDepartment());
+                    alloc.put("semester", h.getSemester());
+                    alloc.put("sectionName", h.getSectionName() != null ? h.getSectionName() : "N/A");
+                    alloc.put("status", "Finalized");
+                    alloc.put("year", sub != null ? sub.getYear() : 0);
+                    alloc.put("preferenceNumber", -1);
+                    
+                    String key = h.getSubjectId() + "_" + (h.getSectionName() != null ? h.getSectionName() : "N/A");
+                    allocMap.put(key, alloc);
+                }
+            }
+
+            // 2. Active section allocations
+            for (SectionAllocation sa : activeSecAllocs) {
+                if (sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(unknownId)) {
+                    Subject sub = sa.getSubjectId() != null ? subjectMap.get(sa.getSubjectId().toLowerCase()) : null;
+                    if (sub != null && sub.getAcademicYear() != null && sub.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                        String key = sa.getSubjectId() + "_" + (sa.getSectionName() != null ? sa.getSectionName() : "N/A");
+                        if (!allocMap.containsKey(key)) {
+                            Map<String, Object> alloc = new HashMap<>();
+                            alloc.put("subjectId", sa.getSubjectId());
+                            alloc.put("subjectName", sub.getName());
+                            alloc.put("department", sub.getDep());
+                            alloc.put("semester", sub.getSem());
+                            alloc.put("sectionName", sa.getSectionName() != null ? sa.getSectionName() : "N/A");
+                            alloc.put("status", sa.isFinalized() ? "Finalized" : "Draft");
+                            alloc.put("year", sub.getYear());
+                            alloc.put("preferenceNumber", -1);
+                            
+                            allocMap.put(key, alloc);
+                        }
+                    }
+                }
+            }
+
+            // 3. Active subject allocations
+            for (SubjectAllocation sa : activeSubAllocs) {
+                if (sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(unknownId)) {
+                    Subject sub = sa.getSubjectId() != null ? subjectMap.get(sa.getSubjectId().toLowerCase()) : null;
+                    if (sub != null && sub.getAcademicYear() != null && sub.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                        boolean alreadyHasSectionOrHistory = false;
+                        for (String key : allocMap.keySet()) {
+                            if (key.startsWith(sa.getSubjectId() + "_")) {
+                                alreadyHasSectionOrHistory = true;
+                                break;
+                            }
+                        }
+                        if (!alreadyHasSectionOrHistory) {
+                            String key = sa.getSubjectId() + "_N/A";
+                            Map<String, Object> alloc = new HashMap<>();
+                            alloc.put("subjectId", sa.getSubjectId());
+                            alloc.put("subjectName", sub.getName());
+                            alloc.put("department", sub.getDep());
+                            alloc.put("semester", sub.getSem());
+                            alloc.put("sectionName", "N/A");
+                            alloc.put("status", sa.isFinalized() ? "Finalized" : "Draft");
+                            alloc.put("year", sub.getYear());
+                            alloc.put("preferenceNumber", -1);
+                            
+                            allocMap.put(key, alloc);
+                        }
+                    }
+                }
+            }
+
+            facData.put("allocations", new ArrayList<>(allocMap.values()));
+            report.add(facData);
+        }
+
         return ResponseEntity.ok(report);
     }
 

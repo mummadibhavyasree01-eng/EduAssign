@@ -54,8 +54,8 @@ public class FacultyController {
     @GetMapping("/allocations/{facultyId}")
     public ResponseEntity<?> getAllocations(@PathVariable String facultyId) {
         java.util.Map<String, Object> result = new java.util.HashMap<>();
-        result.put("subjectAllocations", subjectService.getFinalizedSubjectAllocationsByFacultyId(facultyId));
-        result.put("sectionAllocations", subjectService.getFinalizedSectionAllocationsByFacultyId(facultyId));
+        result.put("subjectAllocations", subjectService.getAllocationsByFacultyId(facultyId));
+        result.put("sectionAllocations", subjectService.getSectionAllocationsByFacultyId(facultyId));
         return ResponseEntity.ok(result);
     }
 

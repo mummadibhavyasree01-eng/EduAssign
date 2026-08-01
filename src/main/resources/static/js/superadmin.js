@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // State cache for Faculty & Reports
   let facultyList = [];
   let reportData = [];
+  let rawReportData = [];
 
   // 2. Tab Navigation
   const navItems = document.querySelectorAll('.nav-item');
@@ -545,18 +546,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (deptSelect) deptSelect.value = '';
     if (semSelect) semSelect.value = '';
     
-    // Clear custom trigger label
-    const triggerLabel = document.getElementById('custom-dept-trigger-label');
-    if (triggerLabel) {
-      triggerLabel.innerText = 'Select Dept & Sem';
-      triggerLabel.style.color = 'var(--text-muted)';
+    if (deptSelect) {
+      deptSelect.removeEventListener('change', loadReportData);
+      deptSelect.addEventListener('change', loadReportData);
+    }
+    if (semSelect) {
+      semSelect.removeEventListener('change', loadReportData);
+      semSelect.addEventListener('change', loadReportData);
+    }
+
+    const academicYearInput = document.getElementById('report-academic-year-input');
+    if (academicYearInput) {
+      academicYearInput.removeEventListener('change', loadReportData);
+      academicYearInput.addEventListener('change', loadReportData);
     }
     
     if (departments.length === 0 || semesters.length === 0) {
       await loadConfigOptions();
     }
     populateReportFilterDropdowns();
-    populateCustomDeptDropdown();
   }
 
   async function loadReportData() {
@@ -581,10 +589,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const data = await apiRequest(`/superadmin/reports/allocations?academicYear=${encodeURIComponent(academicYearVal)}`);
-      let fetchedReportData = Array.isArray(data) ? data : [];
+      rawReportData = Array.isArray(data) ? data : [];
 
       // Filter allocations matching the chosen department and semester
-      reportData = fetchedReportData.map(fac => {
+      reportData = rawReportData.map(fac => {
         const filteredAllocations = (fac.allocations || []).filter(a => {
           const matchDept = a.department && a.department.toUpperCase() === deptVal.toUpperCase();
           const matchSem = a.semester && Number(a.semester) === Number(semVal);
@@ -619,8 +627,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     list.forEach(fac => {
       const tr = document.createElement('tr');
+      const isUnknown = fac.isUnknown === true;
+      if (isUnknown) {
+        tr.style.background = 'rgba(239, 68, 68, 0.05)';
+        tr.style.borderLeft = '4px solid var(--error)';
+      }
       
-      // Group allocations by year (1, 2, 3, 4)
       const yearAllocs = { 1: [], 2: [], 3: [], 4: [] };
       if (fac.allocations && fac.allocations.length > 0) {
         fac.allocations.forEach(a => {
@@ -634,28 +646,38 @@ document.addEventListener('DOMContentLoaded', () => {
       const renderYearCell = (allocs) => {
         if (!allocs || allocs.length === 0) return '<span style="color: var(--text-disabled);">-</span>';
         
-        // Chunk allocations into groups of 3
-        const chunks = [];
-        for (let i = 0; i < allocs.length; i += 3) {
-          chunks.push(allocs.slice(i, i + 3));
-        }
+        return allocs.map(a => {
+          const secSuffix = a.sectionName && a.sectionName !== 'N/A' ? `-${a.sectionName}` : '';
+          const badgeText = `${a.subjectName || ''}${secSuffix}`;
+          const badgeBg = isUnknown ? 'rgba(239, 68, 68, 0.12)' : 'rgba(20, 184, 166, 0.08)';
+          const badgeBorder = isUnknown ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(20, 184, 166, 0.2)';
+          const textStyle = isUnknown ? 'color: var(--error);' : 'color: var(--text-main);';
 
-        return chunks.map(chunk => {
-          const rowHtml = chunk.map(a => {
-            const secName = a.sectionName && a.sectionName !== 'N/A' ? ` - Sec ${a.sectionName}` : '';
-            return `
-              <div class="allocation-badge" style="background: rgba(20, 184, 166, 0.08); border: 1px solid rgba(20, 184, 166, 0.2); border-radius: 4px; padding: 4px 10px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; max-width: calc(33.33% - 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                <span style="color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${a.subjectName || ''} <code style="color: var(--text-muted); font-size: 0.78rem;">(${a.subjectId || ''}${secName})</code></span>
-              </div>
-            `;
-          }).join('');
-          return `<div style="display: flex; flex-wrap: nowrap; gap: 8px; width: 100%; align-items: center; margin-bottom: 4px;">${rowHtml}</div>`;
+          return `
+            <div class="allocation-badge" style="background: ${badgeBg}; border: ${badgeBorder}; border-radius: 4px; padding: 4px 10px; font-size: 0.85rem; display: block; margin-bottom: 6px; white-space: nowrap; width: fit-content; max-width: 100%; overflow: hidden; text-overflow: ellipsis;">
+              <span style="${textStyle}">${badgeText}</span>
+            </div>
+          `;
         }).join('');
       };
-      
+
+      const facultyIdHtml = isUnknown 
+        ? `<strong style="color: var(--error);"><i class="fas fa-exclamation-triangle" style="margin-right: 6px;"></i>${fac.facultyId}</strong>` 
+        : `<strong>${fac.facultyId || ''}</strong>`;
+        
+      const editBtnHtml = `
+        <button onclick="openFacultyAllocationsEditModal('${fac.facultyId}', '${(fac.name || '').replace(/'/g, "\\'")}', ${isUnknown})" style="background: none; border: none; padding: 4px 8px; margin-left: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--secondary);" title="Edit Faculty Allocations">
+          <i class="${isUnknown ? 'fas fa-user-plus' : 'fas fa-edit'}" style="font-size: 0.95rem; color: ${isUnknown ? 'var(--error)' : 'var(--secondary)'};"></i>
+        </button>
+      `;
+
+      const facultyNameHtml = isUnknown 
+        ? `<span style="color: var(--error); font-weight: 500;">${fac.name} (Pending Hire)</span>${editBtnHtml}` 
+        : `<span>${fac.name || ''}</span>${editBtnHtml}`;
+
       tr.innerHTML = `
-        <td><strong>${fac.facultyId || ''}</strong></td>
-        <td>${fac.name || ''}</td>
+        <td>${facultyIdHtml}</td>
+        <td>${facultyNameHtml}</td>
         <td>${renderYearCell(yearAllocs[1])}</td>
         <td>${renderYearCell(yearAllocs[2])}</td>
         <td>${renderYearCell(yearAllocs[3])}</td>
@@ -709,6 +731,161 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       renderReportTable(filtered);
     });
+  }
+
+  let activeEditFacultyId = null;
+  let activeEditFacultyName = null;
+  let activeEditFacultyIsUnknown = false;
+
+  window.openFacultyAllocationsEditModal = function(facultyId, facultyName, isUnknown) {
+    activeEditFacultyId = facultyId;
+    activeEditFacultyName = facultyName;
+    activeEditFacultyIsUnknown = isUnknown;
+
+    document.getElementById('fac-edit-name-info').innerText = facultyName;
+    document.getElementById('fac-edit-id-info').innerText = facultyId;
+
+    const listEl = document.getElementById('fac-allocs-list');
+    listEl.innerHTML = '';
+
+    const fac = rawReportData.find(x => x.facultyId && String(x.facultyId).toUpperCase() === String(facultyId).toUpperCase());
+    if (!fac || !fac.allocations || fac.allocations.length === 0) {
+      listEl.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">No active allocations for this faculty.</div>';
+      // Open Modal
+      document.getElementById('faculty-edit-modal-overlay').classList.add('active');
+      return;
+    }
+
+    fac.allocations.forEach(a => {
+      const div = document.createElement('div');
+      div.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px 16px; gap: 12px;";
+
+      const infoSpan = document.createElement('span');
+      const secText = a.sectionName && a.sectionName !== 'N/A' ? ` - Sec ${a.sectionName}` : '';
+      infoSpan.innerHTML = `<strong style="color: var(--text-main);">${a.subjectName}</strong>${secText} <span style="color: var(--text-muted); font-size: 0.82rem; margin-left: 8px;">(Year ${a.year})</span>`;
+
+      const actionArea = document.createElement('div');
+      actionArea.style.cssText = "display: flex; gap: 8px; align-items: center;";
+
+      const reassignBtn = document.createElement('button');
+      reassignBtn.className = "btn btn-primary btn-sm";
+      reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
+      reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
+      reassignBtn.onclick = () => showInlineReassignDropdown(actionArea, a.subjectId, a.subjectName, a.sectionName, facultyId);
+
+      actionArea.appendChild(reassignBtn);
+      div.appendChild(infoSpan);
+      div.appendChild(actionArea);
+      listEl.appendChild(div);
+    });
+
+    // Open Modal
+    document.getElementById('faculty-edit-modal-overlay').classList.add('active');
+  };
+
+  window.closeFacultyEditModal = function() {
+    document.getElementById('faculty-edit-modal-overlay').classList.remove('active');
+    activeEditFacultyId = null;
+    activeEditFacultyName = null;
+    activeEditFacultyIsUnknown = false;
+  };
+
+  async function showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId) {
+    container.innerHTML = '<i class="fas fa-spinner fa-spin" style="color: var(--secondary); margin-right: 12px;"></i>';
+    try {
+      const eligibleList = await apiRequest(`/adminfaculty/reassign-eligible-faculty?subjectId=${encodeURIComponent(subjectId)}&sectionName=${encodeURIComponent(sectionName)}`);
+      
+      container.innerHTML = '';
+      const select = document.createElement('select');
+      select.className = 'form-control';
+      select.style.cssText = "height: 32px; font-size: 0.85rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 4px 8px; width: 180px;";
+
+      if (!eligibleList || eligibleList.length === 0) {
+        const opt = document.createElement('option');
+        opt.text = "No eligible faculty";
+        opt.disabled = true;
+        select.appendChild(opt);
+        container.appendChild(select);
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = "btn btn-ghost btn-sm";
+        cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+        cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
+        cancelBtn.onclick = () => restoreReassignBtn();
+        container.appendChild(cancelBtn);
+      } else {
+        const optDefault = document.createElement('option');
+        optDefault.text = "Select Faculty";
+        optDefault.value = "";
+        optDefault.disabled = true;
+        optDefault.selected = true;
+        select.appendChild(optDefault);
+
+        eligibleList.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f.id;
+          opt.text = `${f.name} (${f.id})`;
+          select.appendChild(opt);
+        });
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = "btn btn-primary btn-sm";
+        saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+        saveBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px;";
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = "btn btn-ghost btn-sm";
+        cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+        cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
+        cancelBtn.onclick = () => restoreReassignBtn();
+
+        saveBtn.onclick = async () => {
+          const toFacultyId = select.value;
+          if (!toFacultyId) {
+            showToast('Validation Error', 'Please select a faculty member.', 'error');
+            return;
+          }
+
+          saveBtn.disabled = true;
+          saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+          try {
+            // Adjust the URL prefix. SuperAdmin can call '/adminfaculty/reassign-allocation' too because it is mapped under AdminController
+            // Wait, does SuperAdminController have /reports/allocations? Yes, but /reassign-allocation is on AdminController. Let's make sure it can access it.
+            await apiRequest(`/adminfaculty/reassign-allocation?subjectId=${encodeURIComponent(subjectId)}&sectionName=${encodeURIComponent(sectionName)}&fromFacultyId=${encodeURIComponent(fromFacultyId)}&toFacultyId=${encodeURIComponent(toFacultyId)}`, {
+              method: 'POST'
+            });
+            showToast('Success', 'Allocation reassigned successfully!', 'success');
+
+            // Refresh parent report data first
+            await loadReportData();
+            // Refresh modal list view
+            openFacultyAllocationsEditModal(activeEditFacultyId, activeEditFacultyName, activeEditFacultyIsUnknown);
+          } catch (err) {
+            showToast('Reassignment Failed', err.message || 'Could not reassign', 'error');
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+          }
+        };
+
+        container.appendChild(select);
+        container.appendChild(saveBtn);
+        container.appendChild(cancelBtn);
+      }
+
+      function restoreReassignBtn() {
+        container.innerHTML = '';
+        const reassignBtn = document.createElement('button');
+        reassignBtn.className = "btn btn-primary btn-sm";
+        reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
+        reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
+        reassignBtn.onclick = () => showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId);
+        container.appendChild(reassignBtn);
+      }
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = '<span style="color: var(--error); font-size: 0.85rem;">Error loading</span>';
+    }
   }
 
   window.exportReportToExcel = function() {
