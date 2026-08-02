@@ -179,3 +179,11 @@ async function apiRequest(url, options = {}) {
     throw error;
   }
 }
+
+// Strip semester suffix from subject names for display/reports
+function cleanSubjectName(name) {
+  return (name || '')
+    .replace(/\s*\(?Sem(?:ester)?[\s-]*(?:\d+|[IVXLCDM]+)\)?/gi, '')
+    .replace(/\s*-\s*$/, '')
+    .trim();
+}

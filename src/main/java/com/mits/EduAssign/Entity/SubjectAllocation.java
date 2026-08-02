@@ -18,6 +18,9 @@ public class SubjectAllocation {
     @Column(name="FacultyId", nullable=false)
     private String facultyId;
 
+    @Column(name="OriginalUnknownFacultyId", nullable=true)
+    private String originalUnknownFacultyId;
+
     @Column(name="Finalized", nullable=false)
     private boolean finalized = false;
 
@@ -51,6 +54,14 @@ public class SubjectAllocation {
 
     public void setFacultyId(String facultyId) {
         this.facultyId = facultyId;
+    }
+
+    public String getOriginalUnknownFacultyId() {
+        return originalUnknownFacultyId;
+    }
+
+    public void setOriginalUnknownFacultyId(String originalUnknownFacultyId) {
+        this.originalUnknownFacultyId = originalUnknownFacultyId;
     }
 
     public boolean isFinalized() {

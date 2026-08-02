@@ -141,6 +141,18 @@ public class DatabaseInitializer implements CommandLineRunner {
             System.err.println("Error resetting faculty passwords: " + e.getMessage());
         }
 
+        // Programmatic one-time cleanup of third year allocation and preference data for testing
+        try {
+            jdbcTemplate.execute("DELETE FROM subject_allocation WHERE SubjectId IN (SELECT SubjectCode FROM subject WHERE year = 3)");
+            jdbcTemplate.execute("DELETE FROM section_allocation WHERE SubjectId IN (SELECT SubjectCode FROM subject WHERE year = 3)");
+            jdbcTemplate.execute("DELETE FROM allocation_history WHERE SubjectId IN (SELECT SubjectCode FROM subject WHERE year = 3)");
+            jdbcTemplate.execute("DELETE FROM faculty_subject_preference WHERE SubjectId IN (SELECT SubjectCode FROM subject WHERE year = 3)");
+            System.out.println("--- Successfully removed all third-year allocation and preference data ---");
+        } catch (Exception e) {
+            System.err.println("Error removing third-year data: " + e.getMessage());
+        }
+
+
         // Print registered users to console
         System.out.println("--- Cleaned Database Users ---");
         for (AdminFaculty u : adminRepository.findAll()) {

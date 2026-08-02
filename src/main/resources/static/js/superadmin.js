@@ -648,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         return allocs.map(a => {
           const secSuffix = a.sectionName && a.sectionName !== 'N/A' ? `-${a.sectionName}` : '';
-          const badgeText = `${a.subjectName || ''}${secSuffix}`;
+          const badgeText = `${cleanSubjectName(a.subjectName)}${secSuffix}`;
           const badgeBg = isUnknown ? 'rgba(239, 68, 68, 0.12)' : 'rgba(20, 184, 166, 0.08)';
           const badgeBorder = isUnknown ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(20, 184, 166, 0.2)';
           const textStyle = isUnknown ? 'color: var(--error);' : 'color: var(--text-main);';
@@ -762,7 +762,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const infoSpan = document.createElement('span');
       const secText = a.sectionName && a.sectionName !== 'N/A' ? ` - Sec ${a.sectionName}` : '';
-      infoSpan.innerHTML = `<strong style="color: var(--text-main);">${a.subjectName}</strong>${secText} <span style="color: var(--text-muted); font-size: 0.82rem; margin-left: 8px;">(Year ${a.year})</span>`;
+      infoSpan.innerHTML = `<strong style="color: var(--text-main);">${cleanSubjectName(a.subjectName)}</strong>${secText} <span style="color: var(--text-muted); font-size: 0.82rem; margin-left: 8px;">(Year ${a.year})</span>`;
 
       const actionArea = document.createElement('div');
       actionArea.style.cssText = "display: flex; gap: 8px; align-items: center;";
@@ -771,7 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
       reassignBtn.className = "btn btn-primary btn-sm";
       reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
       reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
-      reassignBtn.onclick = () => showInlineReassignDropdown(actionArea, a.subjectId, a.subjectName, a.sectionName, facultyId);
+      reassignBtn.onclick = () => showInlineReassignDropdown(actionArea, a.subjectId, a.subjectName, a.sectionName, facultyId, a.year, a.semester);
 
       actionArea.appendChild(reassignBtn);
       div.appendChild(infoSpan);
@@ -790,101 +790,113 @@ document.addEventListener('DOMContentLoaded', () => {
     activeEditFacultyIsUnknown = false;
   };
 
-  async function showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId) {
-    container.innerHTML = '<i class="fas fa-spinner fa-spin" style="color: var(--secondary); margin-right: 12px;"></i>';
-    try {
-      const eligibleList = await apiRequest(`/adminfaculty/reassign-eligible-faculty?subjectId=${encodeURIComponent(subjectId)}&sectionName=${encodeURIComponent(sectionName)}`);
-      
-      container.innerHTML = '';
-      const select = document.createElement('select');
-      select.className = 'form-control';
-      select.style.cssText = "height: 32px; font-size: 0.85rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 4px 8px; width: 180px;";
-
-      if (!eligibleList || eligibleList.length === 0) {
-        const opt = document.createElement('option');
-        opt.text = "No eligible faculty";
-        opt.disabled = true;
-        select.appendChild(opt);
-        container.appendChild(select);
-        
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = "btn btn-ghost btn-sm";
-        cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
-        cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
-        cancelBtn.onclick = () => restoreReassignBtn();
-        container.appendChild(cancelBtn);
-      } else {
-        const optDefault = document.createElement('option');
-        optDefault.text = "Select Faculty";
-        optDefault.value = "";
-        optDefault.disabled = true;
-        optDefault.selected = true;
-        select.appendChild(optDefault);
-
-        eligibleList.forEach(f => {
-          const opt = document.createElement('option');
-          opt.value = f.id;
-          opt.text = `${f.name} (${f.id})`;
-          select.appendChild(opt);
+  function showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId, year, semester) {
+    container.innerHTML = '';
+    
+    const eligibleSwaps = [];
+    rawReportData.forEach(fac => {
+      if (fac.allocations && fac.allocations.length > 0) {
+        fac.allocations.forEach(alloc => {
+          if (Number(alloc.year) === Number(year) && Number(alloc.semester) === Number(semester)) {
+            if (!(alloc.subjectId === subjectId && alloc.sectionName === sectionName && fac.facultyId === fromFacultyId)) {
+              eligibleSwaps.push({
+                subjectId: alloc.subjectId,
+                subjectName: alloc.subjectName,
+                sectionName: alloc.sectionName,
+                facultyId: fac.facultyId,
+                facultyName: fac.name
+              });
+            }
+          }
         });
-
-        const saveBtn = document.createElement('button');
-        saveBtn.className = "btn btn-primary btn-sm";
-        saveBtn.innerHTML = '<i class="fas fa-check"></i>';
-        saveBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px;";
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = "btn btn-ghost btn-sm";
-        cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
-        cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
-        cancelBtn.onclick = () => restoreReassignBtn();
-
-        saveBtn.onclick = async () => {
-          const toFacultyId = select.value;
-          if (!toFacultyId) {
-            showToast('Validation Error', 'Please select a faculty member.', 'error');
-            return;
-          }
-
-          saveBtn.disabled = true;
-          saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-          try {
-            // Adjust the URL prefix. SuperAdmin can call '/adminfaculty/reassign-allocation' too because it is mapped under AdminController
-            // Wait, does SuperAdminController have /reports/allocations? Yes, but /reassign-allocation is on AdminController. Let's make sure it can access it.
-            await apiRequest(`/adminfaculty/reassign-allocation?subjectId=${encodeURIComponent(subjectId)}&sectionName=${encodeURIComponent(sectionName)}&fromFacultyId=${encodeURIComponent(fromFacultyId)}&toFacultyId=${encodeURIComponent(toFacultyId)}`, {
-              method: 'POST'
-            });
-            showToast('Success', 'Allocation reassigned successfully!', 'success');
-
-            // Refresh parent report data first
-            await loadReportData();
-            // Refresh modal list view
-            openFacultyAllocationsEditModal(activeEditFacultyId, activeEditFacultyName, activeEditFacultyIsUnknown);
-          } catch (err) {
-            showToast('Reassignment Failed', err.message || 'Could not reassign', 'error');
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = '<i class="fas fa-check"></i>';
-          }
-        };
-
-        container.appendChild(select);
-        container.appendChild(saveBtn);
-        container.appendChild(cancelBtn);
       }
+    });
 
-      function restoreReassignBtn() {
-        container.innerHTML = '';
-        const reassignBtn = document.createElement('button');
-        reassignBtn.className = "btn btn-primary btn-sm";
-        reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
-        reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
-        reassignBtn.onclick = () => showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId);
-        container.appendChild(reassignBtn);
-      }
-    } catch (err) {
-      console.error(err);
-      container.innerHTML = '<span style="color: var(--error); font-size: 0.85rem;">Error loading</span>';
+    const select = document.createElement('select');
+    select.className = 'form-control';
+    select.style.cssText = "height: 32px; font-size: 0.85rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 4px 8px; width: 220px;";
+
+    if (eligibleSwaps.length === 0) {
+      const opt = document.createElement('option');
+      opt.text = "No swap options";
+      opt.disabled = true;
+      select.appendChild(opt);
+      container.appendChild(select);
+      
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = "btn btn-ghost btn-sm";
+      cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+      cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
+      cancelBtn.onclick = () => restoreReassignBtn();
+      container.appendChild(cancelBtn);
+    } else {
+      const optDefault = document.createElement('option');
+      optDefault.text = "Swap with subject/section";
+      optDefault.value = "";
+      optDefault.disabled = true;
+      optDefault.selected = true;
+      select.appendChild(optDefault);
+
+      eligibleSwaps.sort((s1, s2) => s1.subjectName.localeCompare(s2.subjectName));
+
+      eligibleSwaps.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = `${opt.subjectId}|${opt.sectionName}`;
+        o.text = `${cleanSubjectName(opt.subjectName)} - Sec ${opt.sectionName} (${opt.facultyName})`;
+        select.appendChild(o);
+      });
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = "btn btn-primary btn-sm";
+      saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+      saveBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px;";
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = "btn btn-ghost btn-sm";
+      cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+      cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
+      cancelBtn.onclick = () => restoreReassignBtn();
+
+      saveBtn.onclick = async () => {
+        const val = select.value;
+        if (!val) {
+          showToast('Selection Required', 'Please select a subject/section to swap with.', 'error');
+          return;
+        }
+
+        const [newSubjectId, newSectionName] = val.split('|');
+
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        try {
+          await apiRequest(`/adminfaculty/swap-subjects?facultyId=${encodeURIComponent(fromFacultyId)}&oldSubjectId=${encodeURIComponent(subjectId)}&oldSectionName=${encodeURIComponent(sectionName)}&newSubjectId=${encodeURIComponent(newSubjectId)}&newSectionName=${encodeURIComponent(newSectionName)}`, {
+            method: 'POST'
+          });
+          showToast('Success', 'Allocations swapped successfully!', 'success');
+
+          await loadReportData();
+          openFacultyAllocationsEditModal(activeEditFacultyId, activeEditFacultyName, activeEditFacultyIsUnknown);
+        } catch (err) {
+          showToast('Swap Failed', err.message || 'Could not swap allocations', 'error');
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+        }
+      };
+
+      container.appendChild(select);
+      container.appendChild(saveBtn);
+      container.appendChild(cancelBtn);
+    }
+
+    function restoreReassignBtn() {
+      container.innerHTML = '';
+      const reassignBtn = document.createElement('button');
+      reassignBtn.className = "btn btn-primary btn-sm";
+      reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
+      reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
+      reassignBtn.onclick = () => showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId, year, semester);
+      container.appendChild(reassignBtn);
     }
   }
 
@@ -928,7 +940,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const getExcelCellText = (allocsList) => {
         if (allocsList.length === 0) return '';
         return allocsList.map(a => {
-          return `${a.subjectName || ''} (${a.subjectId || ''})`;
+          return `${cleanSubjectName(a.subjectName)} (${a.subjectId || ''})`;
         }).join(', ');
       };
 

@@ -53,6 +53,7 @@ private JdbcTemplate jdbcTemplate;
 
 		return null;
 	}
+	@org.springframework.transaction.annotation.Transactional
 	public AdminFaculty addFaculty(AdminFaculty faculty) {
 		if (faculty == null || faculty.getId() == null || faculty.getId().trim().isEmpty()) {
 			throw new IllegalArgumentException("Faculty ID cannot be empty.");
@@ -82,6 +83,14 @@ private JdbcTemplate jdbcTemplate;
 					String newId = idTrim;
 
 					System.out.println("Migrating email " + emailTrim + " from old ID " + oldId + " to new ID " + newId);
+
+					// Preserve password and role from existing record if they are not explicitly provided
+					if (faculty.getPassword() == null || faculty.getPassword().trim().isEmpty() || "faculty@mits".equals(faculty.getPassword())) {
+						faculty.setPassword(existing.getPassword());
+					}
+					if (faculty.getRole() == null || faculty.getRole().trim().isEmpty() || "faculty".equals(faculty.getRole())) {
+						faculty.setRole(existing.getRole());
+					}
 
 					// Re-link references in other tables
 					jdbcTemplate.update("UPDATE faculty_subject_preference SET faculty_id = ? WHERE faculty_id = ?", newId, oldId);
@@ -201,6 +210,7 @@ return adminRepository.save(admin);
 		list.sort(new NaturalOrderComparator());
 		return list;
 	}
+	@org.springframework.transaction.annotation.Transactional
 	public void uploadFaculty(MultipartFile file) {
 		    try {
 

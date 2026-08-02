@@ -217,9 +217,10 @@ public class AdminController {
 
 	    @PostMapping("/allocate-section")
 	    public ResponseEntity<?> allocateSection(
-	            @RequestBody SectionAllocation allocation) {
+	            @RequestBody SectionAllocation allocation,
+	            @RequestParam(required = false, defaultValue = "false") boolean ignoreConstraints) {
 	        try {
-	            SectionAllocation saved = subjectService.allocateSection(allocation);
+	            SectionAllocation saved = subjectService.allocateSection(allocation, ignoreConstraints);
 	            return ResponseEntity.ok(saved);
 	        } catch (IllegalStateException e) {
 	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
@@ -311,12 +312,25 @@ public class AdminController {
 	            @RequestParam String subjectId,
 	            @RequestParam String sectionName,
 	            @RequestParam String fromFacultyId,
-	            @RequestParam String toFacultyId) {
+	            @RequestParam String toFacultyId,
+	            @RequestParam(required = false, defaultValue = "false") boolean ignoreConstraints) {
 	        try {
-	            subjectService.reassignSectionAllocation(subjectId, sectionName, fromFacultyId, toFacultyId);
+	            subjectService.reassignSectionAllocation(subjectId, sectionName, fromFacultyId, toFacultyId, ignoreConstraints);
 	            return ResponseEntity.ok(Map.of("message", "Allocation reassigned successfully"));
 	        } catch (Exception e) {
-	            return ResponseEntity.badRequest().body(e.getMessage());
+	            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+	        }
+	    }
+
+	    @PostMapping("/assign-unknown-to-faculty")
+	    public ResponseEntity<?> assignUnknownToFaculty(
+	            @RequestParam String unknownFacultyId,
+	            @RequestParam String newFacultyId) {
+	        try {
+	            subjectService.assignUnknownToFaculty(unknownFacultyId, newFacultyId);
+	            return ResponseEntity.ok(Map.of("message", "Unknown faculty allocations successfully assigned to new faculty"));
+	        } catch (Exception e) {
+	            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
 	        }
 	    }
 
@@ -329,6 +343,21 @@ public class AdminController {
 	            return ResponseEntity.ok(eligible);
 	        } catch (Exception e) {
 	            return ResponseEntity.badRequest().body(e.getMessage());
+	        }
+	    }
+
+	    @PostMapping("/swap-subjects")
+	    public ResponseEntity<?> swapSubjects(
+	            @RequestParam String facultyId,
+	            @RequestParam String oldSubjectId,
+	            @RequestParam String oldSectionName,
+	            @RequestParam String newSubjectId,
+	            @RequestParam String newSectionName) {
+	        try {
+	            subjectService.swapAllocationsForSubjects(facultyId, oldSubjectId, oldSectionName, newSubjectId, newSectionName);
+	            return ResponseEntity.ok(Map.of("message", "Allocations swapped successfully"));
+	        } catch (IllegalArgumentException e) {
+	            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
 	        }
 	    }
 }

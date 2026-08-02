@@ -157,6 +157,7 @@ public class SuperAdminController {
             for (AllocationHistory h : historyList) {
                 if (h.getFacultyId() != null && h.getFacultyId().equalsIgnoreCase(f.getId())) {
                     Map<String, Object> alloc = new HashMap<>();
+                    alloc.put("id", h.getId());
                     alloc.put("subjectId", h.getSubjectId());
                     Subject sub = h.getSubjectId() != null ? subjectMap.get(h.getSubjectId().toLowerCase()) : null;
                     alloc.put("subjectName", sub != null ? sub.getName() : "Unknown Subject");
@@ -188,6 +189,7 @@ public class SuperAdminController {
                         String key = sa.getSubjectId() + "_" + (sa.getSectionName() != null ? sa.getSectionName() : "N/A");
                         if (!allocMap.containsKey(key)) {
                             Map<String, Object> alloc = new HashMap<>();
+                            alloc.put("id", sa.getId());
                             alloc.put("subjectId", sa.getSubjectId());
                             alloc.put("subjectName", sub.getName());
                             alloc.put("department", sub.getDep());
@@ -226,6 +228,7 @@ public class SuperAdminController {
                         if (!alreadyHasSectionOrHistory) {
                             String key = sa.getSubjectId() + "_N/A";
                             Map<String, Object> alloc = new HashMap<>();
+                            alloc.put("id", sa.getId());
                             alloc.put("subjectId", sa.getSubjectId());
                             alloc.put("subjectName", sub.getName());
                             alloc.put("department", sub.getDep());
@@ -291,6 +294,7 @@ public class SuperAdminController {
             for (AllocationHistory h : historyList) {
                 if (h.getFacultyId() != null && h.getFacultyId().equalsIgnoreCase(unknownId)) {
                     Map<String, Object> alloc = new HashMap<>();
+                    alloc.put("id", h.getId());
                     alloc.put("subjectId", h.getSubjectId());
                     Subject sub = h.getSubjectId() != null ? subjectMap.get(h.getSubjectId().toLowerCase()) : null;
                     alloc.put("subjectName", sub != null ? sub.getName() : "Unknown Subject");
@@ -314,6 +318,7 @@ public class SuperAdminController {
                         String key = sa.getSubjectId() + "_" + (sa.getSectionName() != null ? sa.getSectionName() : "N/A");
                         if (!allocMap.containsKey(key)) {
                             Map<String, Object> alloc = new HashMap<>();
+                            alloc.put("id", sa.getId());
                             alloc.put("subjectId", sa.getSubjectId());
                             alloc.put("subjectName", sub.getName());
                             alloc.put("department", sub.getDep());
@@ -344,6 +349,7 @@ public class SuperAdminController {
                         if (!alreadyHasSectionOrHistory) {
                             String key = sa.getSubjectId() + "_N/A";
                             Map<String, Object> alloc = new HashMap<>();
+                            alloc.put("id", sa.getId());
                             alloc.put("subjectId", sa.getSubjectId());
                             alloc.put("subjectName", sub.getName());
                             alloc.put("department", sub.getDep());

@@ -50,6 +50,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const targetId = item.getAttribute('data-target');
       document.getElementById(targetId).classList.add('active');
 
+      // Update floating buttons visibility based on active tab
+      updateFloatingButtons();
+
       // Refresh data depending on target tab
       if (targetId === 'selections-tab') loadFacultySelections();
       if (targetId === 'subject-tab') loadSubjects();
@@ -149,17 +152,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const academicYearInput = document.getElementById('pref-academic-year-input');
       const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '2026-27';
 
-      const faculty = await apiRequest('/adminfaculty/viewfaculty');
-      const subjects = await apiRequest('/subject/viewAll');
-      
-      let allPreferences, noPrefFaculty;
-      if (academicYearVal) {
-        allPreferences = await apiRequest(`/faculty/preferences/by-academic-year?academicYear=${encodeURIComponent(academicYearVal)}`);
-        noPrefFaculty = await apiRequest(`/adminfaculty/no-preferences-faculty?academicYear=${encodeURIComponent(academicYearVal)}`);
-      } else {
-        allPreferences = await apiRequest('/faculty/preferences/all');
-        noPrefFaculty = await apiRequest('/adminfaculty/no-preferences-faculty');
-      }
+      const [faculty, subjects, allPreferences, sectionAllocs, selectionWindow] = await Promise.all([
+        apiRequest('/adminfaculty/viewfaculty'),
+        apiRequest('/subject/viewAll'),
+        academicYearVal 
+          ? apiRequest(`/faculty/preferences/by-academic-year?academicYear=${encodeURIComponent(academicYearVal)}`)
+          : apiRequest('/faculty/preferences/all'),
+        apiRequest('/adminfaculty/section-allocations'),
+        apiRequest('/adminfaculty/deadline')
+      ]);
 
       const facultyMap = {};
       const facList = Array.isArray(faculty) ? faculty : [];
@@ -173,7 +174,9 @@ document.addEventListener('DOMContentLoaded', () => {
         allPreferences: Array.isArray(allPreferences) ? allPreferences : [],
         facultyMap,
         subjectsMap,
-        facultyList: Array.isArray(faculty) ? faculty : []
+        facultyList: Array.isArray(faculty) ? faculty : [],
+        sectionAllocs: Array.isArray(sectionAllocs) ? sectionAllocs : [],
+        selectionWindow: selectionWindow || null
       };
 
       renderPreferencesTable();
@@ -690,9 +693,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Pending faculty are those in the facultyList who have not selected any filtered subject
+    // AND who are not already fully allocated (i.e. number of distinct allocated subjects < maxSubjectsLimit)
+    const maxSubjectsLimit = (data.selectionWindow && data.selectionWindow.maxSubjectsAllocated)
+      ? Number(data.selectionWindow.maxSubjectsAllocated)
+      : 3;
+
     const pendingFaculty = (matchingSubjects.length === 0) 
       ? [] 
-      : data.facultyList.filter(f => !submittedFacultyIds.has(f.id));
+      : data.facultyList.filter(f => {
+          const hasPrefs = submittedFacultyIds.has(f.id);
+          if (hasPrefs) return false;
+
+          const facAllocs = data.sectionAllocs.filter(sa => {
+            if (!sa.facultyId || sa.facultyId.toUpperCase() !== f.id.toUpperCase()) return false;
+            const sub = data.subjectsMap[sa.subjectId.toLowerCase()];
+            return sub && sub.academicYear && sub.academicYear.toLowerCase() === academicYearVal.toLowerCase();
+          });
+          const uniqueAllocatedSubjectIds = new Set(facAllocs.map(sa => sa.subjectId.toLowerCase()));
+          const isFullyAllocated = uniqueAllocatedSubjectIds.size >= maxSubjectsLimit;
+
+          return !isFullyAllocated;
+        });
 
     if (pendingFaculty.length === 0) {
       tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--success); padding: 15px;"><i class="fas fa-check-circle"></i> All faculty submitted!</td></tr>`;
@@ -2069,12 +2090,13 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = `<tr><td colspan="2" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>`;
 
     try {
-      const [allocations, sectionAllocs, faculty, subjects, selectionWindow] = await Promise.all([
+      const [allocations, sectionAllocs, faculty, subjects, selectionWindow, preferences] = await Promise.all([
         apiRequest('/adminfaculty/allocations'),
         apiRequest('/adminfaculty/section-allocations'),
         apiRequest('/adminfaculty/viewfaculty'),
         apiRequest('/subject/viewAll'),
-        apiRequest('/adminfaculty/deadline')
+        apiRequest('/adminfaculty/deadline'),
+        apiRequest('/faculty/preferences/all')
       ]);
 
       const subList = Array.isArray(subjects) ? subjects : [];
@@ -2186,10 +2208,19 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         }
 
+        const activeAcademicYear = (selectionWindow && selectionWindow.academicYear) ? selectionWindow.academicYear.trim().toLowerCase() : '';
+        const prefsForActiveYear = (Array.isArray(preferences) ? preferences : []).filter(p => {
+          if (!activeAcademicYear) return true;
+          const sub = subList.find(s => s.id.toLowerCase() === p.subjectId.toLowerCase());
+          return sub && sub.academicYear && sub.academicYear.toLowerCase() === activeAcademicYear;
+        });
+        const facultyWhoSubmittedPrefs = new Set(prefsForActiveYear.map(p => p.facultyId.toUpperCase()));
+
         const unallocatedFaculties = facList.filter(f => {
           const isSuper = f.role && f.role.toUpperCase() === 'SUPERADMIN';
           const isNotAllocated = !allocatedIds.has(f.id.toUpperCase());
-          return !isSuper && isNotAllocated;
+          const submittedPrefs = facultyWhoSubmittedPrefs.has(f.id.toUpperCase());
+          return !isSuper && isNotAllocated && submittedPrefs;
         });
 
         if (unallocatedFaculties.length === 0) {
@@ -2722,11 +2753,12 @@ document.addEventListener('DOMContentLoaded', () => {
           ...fac,
           allocations: filteredAllocations
         };
-      }).filter(fac => fac.allocations.length > 0);
+      }).filter(fac => fac.allocations.length > 0 || fac.isUnknown !== true);
 
       reportData.sort((a, b) => (a.facultyId || '').localeCompare(b.facultyId || '', 'en', { numeric: true, sensitivity: 'base' }));
 
       renderReportTable(reportData);
+      await renderReportPendingSections();
     } catch (error) {
       showToast('Load Error', 'Could not fetch report data', 'error');
       tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--error);">Failed to load report data: ${error.message}</td></tr>`;
@@ -2766,7 +2798,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         return allocs.map(a => {
           const secSuffix = a.sectionName && a.sectionName !== 'N/A' ? `-${a.sectionName}` : '';
-          const badgeText = `${a.subjectName || ''}${secSuffix}`;
+          const badgeText = `${cleanSubjectName(a.subjectName)}${secSuffix}`;
           const badgeBg = isUnknown ? 'rgba(239, 68, 68, 0.12)' : 'rgba(20, 184, 166, 0.08)';
           const badgeBorder = isUnknown ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(20, 184, 166, 0.2)';
           const textStyle = isUnknown ? 'color: var(--error);' : 'color: var(--text-main);';
@@ -2783,11 +2815,17 @@ document.addEventListener('DOMContentLoaded', () => {
         ? `<strong style="color: var(--error);"><i class="fas fa-exclamation-triangle" style="margin-right: 6px;"></i>${fac.facultyId}</strong>` 
         : `<strong>${fac.facultyId}</strong>`;
         
-      const editBtnHtml = `
-        <button onclick="openFacultyAllocationsEditModal('${fac.facultyId}', '${fac.name.replace(/'/g, "\\'")}', ${isUnknown})" style="background: none; border: none; padding: 4px 8px; margin-left: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--secondary);" title="Edit Faculty Allocations">
-          <i class="${isUnknown ? 'fas fa-user-plus' : 'fas fa-edit'}" style="font-size: 0.95rem; color: ${isUnknown ? 'var(--error)' : 'var(--secondary)'};"></i>
+      const editBtnHtml = isUnknown
+        ? `
+        <button onclick="openAssignFacultyModal('${fac.facultyId}')" style="background: none; border: none; padding: 4px 8px; margin-left: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--error);" title="Assign Real Faculty">
+          <i class="fas fa-user-plus" style="font-size: 0.95rem;"></i>
         </button>
-      `;
+        `
+        : `
+        <button onclick="openFacultyAllocationsEditModal('${fac.facultyId}', '${fac.name.replace(/'/g, "\\'")}', ${isUnknown})" style="background: none; border: none; padding: 4px 8px; margin-left: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--secondary);" title="Edit Faculty Allocations">
+          <i class="fas fa-edit" style="font-size: 0.95rem;"></i>
+        </button>
+        `;
 
       const facultyNameHtml = isUnknown 
         ? `<span style="color: var(--error); font-weight: 500;">${fac.name} (Pending Hire)</span>${editBtnHtml}` 
@@ -2840,35 +2878,185 @@ document.addEventListener('DOMContentLoaded', () => {
     listEl.innerHTML = '';
 
     const fac = rawReportData.find(x => x.facultyId && String(x.facultyId).toUpperCase() === String(facultyId).toUpperCase());
-    if (!fac || !fac.allocations || fac.allocations.length === 0) {
+    
+    // Render allocations if any exist
+    if (fac && fac.allocations && fac.allocations.length > 0) {
+      fac.allocations.forEach(a => {
+        const div = document.createElement('div');
+        div.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px 16px; gap: 12px;";
+
+        const infoSpan = document.createElement('span');
+        const secText = a.sectionName && a.sectionName !== 'N/A' ? ` - Sec ${a.sectionName}` : '';
+        infoSpan.innerHTML = `<strong style="color: var(--text-main);">${cleanSubjectName(a.subjectName)}</strong>${secText} <span style="color: var(--text-muted); font-size: 0.82rem; margin-left: 8px;">(Year ${a.year})</span>`;
+
+        const actionArea = document.createElement('div');
+        actionArea.style.cssText = "display: flex; gap: 8px; align-items: center;";
+
+        const reassignBtn = document.createElement('button');
+        reassignBtn.className = "btn btn-primary btn-sm";
+        reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
+        reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
+        reassignBtn.onclick = () => showInlineReassignDropdown(actionArea, a.subjectId, a.subjectName, a.sectionName, facultyId, a.year, a.semester);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = "btn btn-danger btn-sm";
+        deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        deleteBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; background: #EF4444; border: none; color: #fff; cursor: pointer; border-radius: var(--border-radius-sm);";
+        deleteBtn.onclick = () => deleteFacultyAllocationFromModal(a.id, facultyId, facultyName);
+
+        actionArea.appendChild(reassignBtn);
+        actionArea.appendChild(deleteBtn);
+        div.appendChild(infoSpan);
+        div.appendChild(actionArea);
+        listEl.appendChild(div);
+      });
+    } else {
       listEl.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">No active allocations for this faculty.</div>';
-      // Open Modal
-      document.getElementById('faculty-edit-modal-overlay').classList.add('active');
-      return;
     }
 
-    fac.allocations.forEach(a => {
-      const div = document.createElement('div');
-      div.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); padding: 12px 16px; gap: 12px;";
+    // Dynamic Extensions: Add Subject / Pending Sections
+    const existingExt = document.getElementById('modal-edit-extensions');
+    if (existingExt) {
+      existingExt.remove();
+    }
 
-      const infoSpan = document.createElement('span');
-      const secText = a.sectionName && a.sectionName !== 'N/A' ? ` - Sec ${a.sectionName}` : '';
-      infoSpan.innerHTML = `<strong style="color: var(--text-main);">${a.subjectName}</strong>${secText} <span style="color: var(--text-muted); font-size: 0.82rem; margin-left: 8px;">(Year ${a.year})</span>`;
+    const extDiv = document.createElement('div');
+    extDiv.id = 'modal-edit-extensions';
+    extDiv.style.cssText = "margin-top: 20px; border-top: 1px solid var(--panel-border); padding-top: 15px;";
+    
+    extDiv.innerHTML = `
+      <div style="margin-bottom: 20px;">
+        <h4 style="color: var(--secondary); font-size: 0.95rem; margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px;"><i class="fas fa-plus-circle"></i> Add Subject Allocation</h4>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <select id="modal-add-subject-select" class="form-control" style="height: 38px; font-size: 0.85rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); color: var(--text-main); border-radius: var(--border-radius-md); padding: 4px 8px; flex: 1;">
+            <option value="" disabled selected>Select from Unknown Faculty or Pending allocations...</option>
+          </select>
+          <button id="modal-add-subject-btn" class="btn btn-primary" style="height: 38px; padding: 0 16px;">Add</button>
+        </div>
+        <div id="modal-warning-area" style="display: none; margin-top: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--border-radius-md); padding: 12px; font-size: 0.85rem; color: var(--error);">
+          <p id="modal-warning-text" style="margin: 0 0 8px 0; font-weight: 500;"></p>
+          <button id="modal-ignore-btn" class="btn btn-danger btn-sm" style="background: #EF4444; border: none; font-size: 0.8rem; padding: 6px 12px; border-radius: 4px; cursor: pointer; color: white;">Ignore Constraints & Add</button>
+        </div>
+      </div>
+    `;
 
-      const actionArea = document.createElement('div');
-      actionArea.style.cssText = "display: flex; gap: 8px; align-items: center;";
+    document.getElementById('faculty-edit-modal-body').appendChild(extDiv);
 
-      const reassignBtn = document.createElement('button');
-      reassignBtn.className = "btn btn-primary btn-sm";
-      reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
-      reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
-      reassignBtn.onclick = () => showInlineReassignDropdown(actionArea, a.subjectId, a.subjectName, a.sectionName, facultyId);
+    // Populate lists asynchronously
+    (async () => {
+      try {
+        const [allSecAllocs, allSections, allSubjects] = await Promise.all([
+          apiRequest('/adminfaculty/section-allocations'),
+          apiRequest('/sections/all'),
+          apiRequest('/subject/viewAll')
+        ]);
 
-      actionArea.appendChild(reassignBtn);
-      div.appendChild(infoSpan);
-      div.appendChild(actionArea);
-      listEl.appendChild(div);
-    });
+        const deptVal = document.getElementById('report-dept-select') ? document.getElementById('report-dept-select').value : '';
+        const semVal = document.getElementById('report-sem-select') ? document.getElementById('report-sem-select').value : '';
+        const academicYearInput = document.getElementById('report-academic-year-input');
+        const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '';
+
+        const activeSubjects = allSubjects.filter(sub => 
+          sub.dep && sub.dep.toUpperCase() === deptVal.toUpperCase() &&
+          sub.sem && Number(sub.sem) === Number(semVal) &&
+          sub.academicYear && sub.academicYear.toLowerCase() === academicYearVal.toLowerCase()
+        );
+
+        const deptSections = allSections.filter(sec => sec.departmentCode && sec.departmentCode.toUpperCase() === deptVal.toUpperCase());
+
+        // Dropdown options
+        const selectEl = document.getElementById('modal-add-subject-select');
+        selectEl.innerHTML = '<option value="" disabled selected>Select from Unknown Faculty or Pending allocations...</option>';
+        document.getElementById('modal-add-subject-btn').disabled = false;
+
+        const unknownAllocs = [];
+        allSecAllocs.forEach(alloc => {
+          if (alloc.facultyId && alloc.facultyId.toUpperCase().startsWith("UNKNOWN_")) {
+            const sub = activeSubjects.find(s => s.id.toLowerCase() === alloc.subjectId.toLowerCase());
+            if (sub) {
+              unknownAllocs.push({
+                subjectId: alloc.subjectId,
+                subjectName: sub.name,
+                sectionName: alloc.sectionName,
+                unknownFacultyId: alloc.facultyId,
+                year: sub.year,
+                sem: sub.sem
+              });
+            }
+          }
+        });
+
+        // Gather pending sections
+        const pendingSections = [];
+        activeSubjects.forEach(sub => {
+          // Check if this subject is allocated to an unknown faculty
+          const isAssignedToUnknown = allSecAllocs.some(alloc => 
+            alloc.subjectId && alloc.subjectId.toLowerCase() === sub.id.toLowerCase() &&
+            alloc.facultyId && alloc.facultyId.toUpperCase().startsWith("UNKNOWN_")
+          );
+          if (isAssignedToUnknown) {
+            return;
+          }
+
+          const subSections = deptSections.filter(sec => Number(sec.yearNumber) === Number(sub.year));
+          subSections.forEach(sec => {
+            const isAllocated = allSecAllocs.some(alloc => 
+              alloc.subjectId && alloc.subjectId.toLowerCase() === sub.id.toLowerCase() &&
+              alloc.sectionName && alloc.sectionName.toUpperCase() === sec.sectionName.toUpperCase()
+            );
+            if (!isAllocated) {
+              pendingSections.push({
+                subjectId: sub.id,
+                subjectName: sub.name,
+                sectionName: sec.sectionName,
+                year: sub.year,
+                sem: sub.sem
+              });
+            }
+          });
+        });
+
+
+
+        // Populate dropdown options (Unknown allocations + Pending sections)
+        if (unknownAllocs.length === 0 && pendingSections.length === 0) {
+          const opt = document.createElement('option');
+          opt.text = "No allocations or pending sections available";
+          opt.disabled = true;
+          selectEl.appendChild(opt);
+          document.getElementById('modal-add-subject-btn').disabled = true;
+        } else {
+          // Unknown allocations first
+          unknownAllocs.forEach(alloc => {
+            const opt = document.createElement('option');
+            opt.value = `${alloc.subjectId}|${alloc.sectionName}|${alloc.unknownFacultyId}`;
+            opt.text = `${cleanSubjectName(alloc.subjectName)} (Year ${alloc.year} - Sec ${alloc.sectionName}) - from ${alloc.unknownFacultyId}`;
+            selectEl.appendChild(opt);
+          });
+          // Pending sections next
+          pendingSections.forEach(ps => {
+            const opt = document.createElement('option');
+            opt.value = `${ps.subjectId}|${ps.sectionName}|PENDING`;
+            opt.text = `${cleanSubjectName(ps.subjectName)} (Year ${ps.year} - Sec ${ps.sectionName}) - Pending`;
+            selectEl.appendChild(opt);
+          });
+        }
+
+        // Dropdown actions
+        const addBtn = document.getElementById('modal-add-subject-btn');
+        addBtn.onclick = async () => {
+          const val = selectEl.value;
+          if (!val) {
+            showToast('Selection Required', 'Please select a subject to add', 'warning');
+            return;
+          }
+          const [subjectId, sectionName, fromFacultyId] = val.split('|');
+          await attemptAddSubject(subjectId, sectionName, fromFacultyId, facultyId, facultyName, false);
+        };
+      } catch (err) {
+        console.error("Error loading extensions in modal:", err);
+      }
+    })();
 
     // Open Modal
     document.getElementById('faculty-edit-modal-overlay').classList.add('active');
@@ -2881,99 +3069,364 @@ document.addEventListener('DOMContentLoaded', () => {
     activeEditFacultyIsUnknown = false;
   };
 
-  async function showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId) {
-    container.innerHTML = '<i class="fas fa-spinner fa-spin" style="color: var(--secondary); margin-right: 12px;"></i>';
+  async function attemptAddSubject(subjectId, sectionName, fromFacultyId, toFacultyId, facultyName, ignoreConstraints) {
+    const warningArea = document.getElementById('modal-warning-area');
+    const warningText = document.getElementById('modal-warning-text');
+    const ignoreBtn = document.getElementById('modal-ignore-btn');
+    
+    warningArea.style.display = 'none';
+
     try {
-      const eligibleList = await apiRequest(`/adminfaculty/reassign-eligible-faculty?subjectId=${encodeURIComponent(subjectId)}&sectionName=${encodeURIComponent(sectionName)}`);
-      
-      container.innerHTML = '';
-      const select = document.createElement('select');
-      select.className = 'form-control';
-      select.style.cssText = "height: 32px; font-size: 0.85rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 4px 8px; width: 180px;";
-
-      if (!eligibleList || eligibleList.length === 0) {
-        const opt = document.createElement('option');
-        opt.text = "No eligible faculty";
-        opt.disabled = true;
-        select.appendChild(opt);
-        container.appendChild(select);
-        
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = "btn btn-ghost btn-sm";
-        cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
-        cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
-        cancelBtn.onclick = () => restoreReassignBtn();
-        container.appendChild(cancelBtn);
-      } else {
-        const optDefault = document.createElement('option');
-        optDefault.text = "Select Faculty";
-        optDefault.value = "";
-        optDefault.disabled = true;
-        optDefault.selected = true;
-        select.appendChild(optDefault);
-
-        eligibleList.forEach(f => {
-          const opt = document.createElement('option');
-          opt.value = f.id;
-          opt.text = `${f.name} (${f.id})`;
-          select.appendChild(opt);
+      if (fromFacultyId === 'PENDING') {
+        await apiRequest(`/adminfaculty/allocate-section?ignoreConstraints=${ignoreConstraints}`, {
+          method: 'POST',
+          body: {
+            subjectId: subjectId,
+            sectionName: sectionName,
+            facultyId: toFacultyId
+          }
         });
-
-        const saveBtn = document.createElement('button');
-        saveBtn.className = "btn btn-primary btn-sm";
-        saveBtn.innerHTML = '<i class="fas fa-check"></i>';
-        saveBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px;";
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = "btn btn-ghost btn-sm";
-        cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
-        cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
-        cancelBtn.onclick = () => restoreReassignBtn();
-
-        saveBtn.onclick = async () => {
-          const toFacultyId = select.value;
-          if (!toFacultyId) {
-            showToast('Validation Error', 'Please select a faculty member.', 'error');
-            return;
-          }
-
-          saveBtn.disabled = true;
-          saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-          try {
-            await apiRequest(`/adminfaculty/reassign-allocation?subjectId=${encodeURIComponent(subjectId)}&sectionName=${encodeURIComponent(sectionName)}&fromFacultyId=${encodeURIComponent(fromFacultyId)}&toFacultyId=${encodeURIComponent(toFacultyId)}`, {
-              method: 'POST'
-            });
-            showToast('Success', 'Allocation reassigned successfully!', 'success');
-
-            // Refresh parent report data first
-            await loadReportData();
-            // Refresh modal list view
-            openFacultyAllocationsEditModal(activeEditFacultyId, activeEditFacultyName, activeEditFacultyIsUnknown);
-          } catch (err) {
-            showToast('Reassignment Failed', err.message || 'Could not reassign', 'error');
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = '<i class="fas fa-check"></i>';
-          }
-        };
-
-        container.appendChild(select);
-        container.appendChild(saveBtn);
-        container.appendChild(cancelBtn);
+      } else {
+        await apiRequest(`/adminfaculty/reassign-allocation?subjectId=${encodeURIComponent(subjectId)}&sectionName=${encodeURIComponent(sectionName)}&fromFacultyId=${encodeURIComponent(fromFacultyId)}&toFacultyId=${encodeURIComponent(toFacultyId)}&ignoreConstraints=${ignoreConstraints}`, {
+          method: 'POST'
+        });
       }
-
-      function restoreReassignBtn() {
-        container.innerHTML = '';
-        const reassignBtn = document.createElement('button');
-        reassignBtn.className = "btn btn-primary btn-sm";
-        reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
-        reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
-        reassignBtn.onclick = () => showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId);
-        container.appendChild(reassignBtn);
-      }
+      showToast('Success', 'Allocation added successfully', 'success');
+      
+      // Reload report and modal
+      await loadReportData();
+      openFacultyAllocationsEditModal(toFacultyId, facultyName, false);
     } catch (err) {
-      console.error(err);
-      container.innerHTML = '<span style="color: var(--error); font-size: 0.85rem;">Error loading</span>';
+      if (!ignoreConstraints) {
+        // Show warning area with ignore option
+        warningArea.style.display = 'block';
+        warningText.innerText = `Constraint Violation: ${err.message || 'The allocation violates one or more rules.'}`;
+        ignoreBtn.onclick = async () => {
+          await attemptAddSubject(subjectId, sectionName, fromFacultyId, toFacultyId, facultyName, true);
+        };
+      } else {
+        showToast('Error', err.message || 'Could not allocate subject even after ignoring constraints.', 'error');
+      }
+    }
+  }
+
+  async function deleteFacultyAllocationFromModal(id, facultyId, facultyName) {
+    if (!id) {
+      showToast('Error', 'Allocation ID not found', 'error');
+      return;
+    }
+    const userConfirmed = await new Promise((resolve) => {
+      showConfirm(
+        'Delete Allocation',
+        'Are you sure you want to delete this allocation? This section will become pending/unallocated.',
+        () => resolve(true)
+      );
+    });
+    if (!userConfirmed) return;
+
+    try {
+      await apiRequest(`/adminfaculty/section-allocation/${id}`, {
+        method: 'DELETE'
+      });
+      showToast('Success', 'Allocation deleted successfully', 'success');
+      await loadReportData();
+      openFacultyAllocationsEditModal(facultyId, facultyName, false);
+    } catch (err) {
+      showToast('Delete Failed', err.message || 'Could not delete allocation', 'error');
+    }
+  }
+
+  window.openAssignFacultyModal = function(unknownFacultyId) {
+    document.getElementById('assign-unknown-id-info').innerText = unknownFacultyId;
+    const select = document.getElementById('assign-new-faculty-select');
+    select.innerHTML = '<option value="" disabled selected>Choose Faculty...</option>';
+
+    // Filter real faculties with 0 allocations
+    const unallocatedRealFaculties = reportData.filter(fac => fac.isUnknown !== true && (!fac.allocations || fac.allocations.length === 0));
+
+    if (unallocatedRealFaculties.length === 0) {
+      const opt = document.createElement('option');
+      opt.text = "No unallocated faculty available";
+      opt.disabled = true;
+      select.appendChild(opt);
+    } else {
+      unallocatedRealFaculties.forEach(fac => {
+        const opt = document.createElement('option');
+        opt.value = fac.facultyId;
+        opt.text = `${fac.name} (${fac.facultyId})`;
+        select.appendChild(opt);
+      });
+    }
+
+    document.getElementById('assign-faculty-modal-overlay').classList.add('active');
+  };
+
+  window.closeAssignFacultyModal = function() {
+    document.getElementById('assign-faculty-modal-overlay').classList.remove('active');
+  };
+
+  window.submitAssignUnknownToFaculty = async function() {
+    const unknownId = document.getElementById('assign-unknown-id-info').innerText;
+    const newFacultyId = document.getElementById('assign-new-faculty-select').value;
+
+    if (!newFacultyId) {
+      showToast('Selection Required', 'Please select a new faculty member.', 'warning');
+      return;
+    }
+
+    try {
+      await apiRequest(`/adminfaculty/assign-unknown-to-faculty?unknownFacultyId=${encodeURIComponent(unknownId)}&newFacultyId=${encodeURIComponent(newFacultyId)}`, {
+        method: 'POST'
+      });
+      showToast('Success', `Allocations assigned to ${newFacultyId} successfully!`, 'success');
+      closeAssignFacultyModal();
+      await loadReportData();
+    } catch (err) {
+      showToast('Assignment Failed', err.message || 'Could not assign unknown allocations', 'error');
+    }
+  };
+
+  async function renderReportPendingSections() {
+    const listEl = document.getElementById('report-pending-sections-list');
+    const containerEl = document.getElementById('report-pending-sections-container');
+    if (!listEl || !containerEl) return;
+
+    try {
+      const [allSecAllocs, allSections, allSubjects] = await Promise.all([
+        apiRequest('/adminfaculty/section-allocations'),
+        apiRequest('/sections/all'),
+        apiRequest('/subject/viewAll')
+      ]);
+
+      const deptVal = document.getElementById('report-dept-select') ? document.getElementById('report-dept-select').value : '';
+      const semVal = document.getElementById('report-sem-select') ? document.getElementById('report-sem-select').value : '';
+      const academicYearInput = document.getElementById('report-academic-year-input');
+      const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '';
+
+      if (!deptVal || !semVal || !academicYearVal) {
+        containerEl.style.display = 'none';
+        updateFloatingButtons();
+        return;
+      }
+
+      const activeSubjects = allSubjects.filter(sub => 
+        sub.dep && sub.dep.toUpperCase() === deptVal.toUpperCase() &&
+        sub.sem && Number(sub.sem) === Number(semVal) &&
+        sub.academicYear && sub.academicYear.toLowerCase() === academicYearVal.toLowerCase()
+      );
+
+      const deptSections = allSections.filter(sec => sec.departmentCode && sec.departmentCode.toUpperCase() === deptVal.toUpperCase());
+
+      const pendingSections = [];
+      activeSubjects.forEach(sub => {
+        // Check if this subject is allocated to an unknown faculty
+        const isAssignedToUnknown = allSecAllocs.some(alloc => 
+          alloc.subjectId && alloc.subjectId.toLowerCase() === sub.id.toLowerCase() &&
+          alloc.facultyId && alloc.facultyId.toUpperCase().startsWith("UNKNOWN_")
+        );
+        if (isAssignedToUnknown) {
+          return;
+        }
+
+        const subSections = deptSections.filter(sec => Number(sec.yearNumber) === Number(sub.year));
+        subSections.forEach(sec => {
+          const isAllocated = allSecAllocs.some(alloc => 
+            alloc.subjectId && alloc.subjectId.toLowerCase() === sub.id.toLowerCase() &&
+            alloc.sectionName && alloc.sectionName.toUpperCase() === sec.sectionName.toUpperCase()
+          );
+          if (!isAllocated) {
+            pendingSections.push({
+              subjectId: sub.id,
+              subjectName: sub.name,
+              sectionName: sec.sectionName,
+              year: sub.year,
+              sem: sub.sem
+            });
+          }
+        });
+      });
+
+      if (pendingSections.length === 0) {
+        containerEl.style.display = 'none';
+      } else {
+        containerEl.style.display = 'block';
+        listEl.innerHTML = '';
+        pendingSections.forEach(ps => {
+          const div = document.createElement('div');
+          div.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 6px; padding: 10px 14px; font-size: 0.88rem; color: var(--text-main);";
+          div.innerHTML = `<span><strong>${cleanSubjectName(ps.subjectName)}</strong> - Sec ${ps.sectionName} <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: 6px;">(Year ${ps.year})</span></span>`;
+          listEl.appendChild(div);
+        });
+      }
+      updateFloatingButtons();
+    } catch (err) {
+      console.error("Error rendering report pending sections:", err);
+      containerEl.style.display = 'none';
+      updateFloatingButtons();
+    }
+  }
+
+  function updateFloatingButtons() {
+    const unknownBtn = document.getElementById('nav-unknown-btn');
+    const pendingBtn = document.getElementById('nav-pending-btn');
+    if (!unknownBtn || !pendingBtn) return;
+
+    const activeTab = document.querySelector('.tab-content.active');
+    const isReportTab = activeTab && activeTab.id === 'allocation-report-tab';
+
+    if (!isReportTab) {
+      unknownBtn.style.display = 'none';
+      pendingBtn.style.display = 'none';
+      return;
+    }
+
+    const hasUnknown = (reportData || []).some(fac => fac.isUnknown === true);
+    unknownBtn.style.display = hasUnknown ? 'flex' : 'none';
+
+    const pendingContainer = document.getElementById('report-pending-sections-container');
+    const hasPending = pendingContainer && pendingContainer.style.display === 'block';
+    pendingBtn.style.display = hasPending ? 'flex' : 'none';
+  }
+
+  // Floating nav buttons initialization
+  const unknownBtnEl = document.getElementById('nav-unknown-btn');
+  const pendingBtnEl = document.getElementById('nav-pending-btn');
+
+  if (unknownBtnEl) {
+    unknownBtnEl.onclick = () => {
+      const unknownRow = document.querySelector('#report-table-body tr[style*="border-left: 4px solid var(--error)"]');
+      if (unknownRow) {
+        unknownRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        unknownRow.style.boxShadow = '0 0 20px var(--error)';
+        setTimeout(() => {
+          unknownRow.style.boxShadow = '';
+        }, 1500);
+      } else {
+        showToast('Not Found', 'No unknown faculty allocations found', 'info');
+      }
+    };
+  }
+
+  if (pendingBtnEl) {
+    pendingBtnEl.onclick = () => {
+      const container = document.getElementById('report-pending-sections-container');
+      if (container) {
+        container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        container.style.boxShadow = '0 0 20px var(--warning)';
+        setTimeout(() => {
+          container.style.boxShadow = '';
+        }, 1500);
+      }
+    };
+  }
+
+  function showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId, year, semester) {
+    container.innerHTML = '';
+    
+    const eligibleSwaps = [];
+    rawReportData.forEach(fac => {
+      if (fac.allocations && fac.allocations.length > 0) {
+        fac.allocations.forEach(alloc => {
+          if (Number(alloc.year) === Number(year) && Number(alloc.semester) === Number(semester)) {
+            if (!(alloc.subjectId === subjectId && alloc.sectionName === sectionName && fac.facultyId === fromFacultyId)) {
+              eligibleSwaps.push({
+                subjectId: alloc.subjectId,
+                subjectName: alloc.subjectName,
+                sectionName: alloc.sectionName,
+                facultyId: fac.facultyId,
+                facultyName: fac.name
+              });
+            }
+          }
+        });
+      }
+    });
+
+    const select = document.createElement('select');
+    select.className = 'form-control';
+    select.style.cssText = "height: 32px; font-size: 0.85rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 4px 8px; width: 220px;";
+
+    if (eligibleSwaps.length === 0) {
+      const opt = document.createElement('option');
+      opt.text = "No swap options";
+      opt.disabled = true;
+      select.appendChild(opt);
+      container.appendChild(select);
+      
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = "btn btn-ghost btn-sm";
+      cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+      cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
+      cancelBtn.onclick = () => restoreReassignBtn();
+      container.appendChild(cancelBtn);
+    } else {
+      const optDefault = document.createElement('option');
+      optDefault.text = "Swap with subject/section";
+      optDefault.value = "";
+      optDefault.disabled = true;
+      optDefault.selected = true;
+      select.appendChild(optDefault);
+
+      eligibleSwaps.sort((s1, s2) => s1.subjectName.localeCompare(s2.subjectName));
+
+      eligibleSwaps.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = `${opt.subjectId}|${opt.sectionName}`;
+        o.text = `${cleanSubjectName(opt.subjectName)} - Sec ${opt.sectionName} (${opt.facultyName})`;
+        select.appendChild(o);
+      });
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = "btn btn-primary btn-sm";
+      saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+      saveBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px;";
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = "btn btn-ghost btn-sm";
+      cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+      cancelBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border); color: var(--text-muted); margin-left: 8px;";
+      cancelBtn.onclick = () => restoreReassignBtn();
+
+      saveBtn.onclick = async () => {
+        const val = select.value;
+        if (!val) {
+          showToast('Selection Required', 'Please select a subject/section to swap with.', 'error');
+          return;
+        }
+
+        const [newSubjectId, newSectionName] = val.split('|');
+
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        try {
+          await apiRequest(`/adminfaculty/swap-subjects?facultyId=${encodeURIComponent(fromFacultyId)}&oldSubjectId=${encodeURIComponent(subjectId)}&oldSectionName=${encodeURIComponent(sectionName)}&newSubjectId=${encodeURIComponent(newSubjectId)}&newSectionName=${encodeURIComponent(newSectionName)}`, {
+            method: 'POST'
+          });
+          showToast('Success', 'Allocations swapped successfully!', 'success');
+
+          await loadReportData();
+          openFacultyAllocationsEditModal(activeEditFacultyId, activeEditFacultyName, activeEditFacultyIsUnknown);
+        } catch (err) {
+          showToast('Swap Failed', err.message || 'Could not swap allocations', 'error');
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+        }
+      };
+
+      container.appendChild(select);
+      container.appendChild(saveBtn);
+      container.appendChild(cancelBtn);
+    }
+
+    function restoreReassignBtn() {
+      container.innerHTML = '';
+      const reassignBtn = document.createElement('button');
+      reassignBtn.className = "btn btn-primary btn-sm";
+      reassignBtn.innerHTML = '<i class="fas fa-random"></i> Reassign';
+      reassignBtn.style.cssText = "height: 32px; font-size: 0.85rem; padding: 4px 12px;";
+      reassignBtn.onclick = () => showInlineReassignDropdown(container, subjectId, subjectName, sectionName, fromFacultyId, year, semester);
+      container.appendChild(reassignBtn);
     }
   }
 
@@ -3013,7 +3466,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!allocs || allocs.length === 0) return '-';
         return allocs.map(a => {
           const secName = a.sectionName && a.sectionName !== 'N/A' ? ` - Sec ${a.sectionName}` : '';
-          return `${a.subjectName} (${a.subjectId}${secName})`;
+          return `${cleanSubjectName(a.subjectName)} (${a.subjectId}${secName})`;
         }).join('; ');
       };
 

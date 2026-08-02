@@ -704,6 +704,16 @@
               </tbody>
             </table>
           </div>
+
+          <div id="report-pending-sections-container" class="glass-panel" style="margin-top: 30px; display: none; border-top: 1px solid var(--panel-border); padding-top: 20px;">
+            <div class="section-header" style="margin-bottom: 15px;">
+              <h3 style="color: var(--warning); display: flex; align-items: center; gap: 8px; font-size: 1.2rem; margin: 0 0 4px 0;"><i class="fas fa-clock"></i> Unallocated / Pending Sections</h3>
+              <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">These sections are configured in the current selection window but are not assigned to any faculty yet.</p>
+            </div>
+            <div id="report-pending-sections-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
         </div>
       </section>
 
@@ -850,6 +860,56 @@
       </div>
     </div>
   </div>
+
+  <!-- Assign Faculty to Unknown Modal -->
+  <div class="modal-overlay" id="assign-faculty-modal-overlay">
+    <div class="modal-container glass-panel" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fas fa-user-plus" style="color: var(--secondary); margin-right: 8px;"></i> Assign Faculty to Unknown</h3>
+        <button class="modal-close" onclick="closeAssignFacultyModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-top: 0; font-size: 0.95rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
+          Choose a new faculty member to take over all allocations for <strong id="assign-unknown-id-info" style="color: var(--error);">UNKNOWN_X</strong>:
+        </p>
+        <div class="form-group">
+          <label for="assign-new-faculty-select">Select New Faculty</label>
+          <select id="assign-new-faculty-select" class="form-control" style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); color: var(--text-main); height: 38px;">
+            <option value="" disabled selected>Choose Faculty...</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeAssignFacultyModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitAssignUnknownToFaculty()">Assign Faculty</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Navigation Buttons -->
+  <div id="floating-nav-buttons" style="position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: column; gap: 12px; z-index: 9999;">
+    <button id="nav-unknown-btn" class="btn" style="display: none; background: #EF4444; color: #fff; box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); border: none; font-weight: bold; animation: pulse-red 2s infinite; font-size: 0.85rem; padding: 10px 16px; border-radius: 8px; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s ease;">
+      <i class="fas fa-exclamation-triangle"></i> Unknown Faculty
+    </button>
+    <button id="nav-pending-btn" class="btn" style="display: none; background: #F59E0B; color: #fff; box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); border: none; font-weight: bold; animation: pulse-orange 2s infinite; font-size: 0.85rem; padding: 10px 16px; border-radius: 8px; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s ease;">
+      <i class="fas fa-clock"></i> Pending Subjects
+    </button>
+  </div>
+
+  <style>
+    @keyframes pulse-red {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); transform: scale(1); }
+      50% { transform: scale(1.03); }
+      70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); transform: scale(1); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); transform: scale(1); }
+    }
+    @keyframes pulse-orange {
+      0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); transform: scale(1); }
+      50% { transform: scale(1.03); }
+      70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); transform: scale(1); }
+      100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); transform: scale(1); }
+    }
+  </style>
 
   <!-- Scripts -->
   <script src="js/common.js?v=6"></script>
