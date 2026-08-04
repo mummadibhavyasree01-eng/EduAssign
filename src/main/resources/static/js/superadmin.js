@@ -1010,7 +1010,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const getExcelCellText = (allocsList) => {
         if (allocsList.length === 0) return '';
         return allocsList.map(a => {
-          return `${cleanSubjectName(a.subjectName)} (${a.subjectId || ''})`;
+          return `${cleanSubjectName(a.subjectName)} (${cleanSubjectCode(a.subjectId || '')})`;
         }).join(', ');
       };
 

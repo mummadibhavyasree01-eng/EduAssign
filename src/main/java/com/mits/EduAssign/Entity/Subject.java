@@ -72,4 +72,10 @@ public class Subject {
 	public void setMock(boolean isMock) {
 		this.isMock = isMock;
 	}
+
+	@jakarta.persistence.Transient
+	public String getSubjectCode() {
+		if (id == null) return null;
+		return id.contains("_") ? id.split("_")[0] : id;
+	}
 }

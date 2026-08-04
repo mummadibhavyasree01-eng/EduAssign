@@ -188,6 +188,11 @@ function cleanSubjectName(name) {
     .trim();
 }
 
+function cleanSubjectCode(id) {
+  if (!id) return '';
+  return id.includes('_') ? id.split('_')[0] : id;
+}
+
 // Global Event Delegation for Password Toggle Eyes
 document.addEventListener('click', function(e) {
   const toggle = e.target.closest('.password-toggle');

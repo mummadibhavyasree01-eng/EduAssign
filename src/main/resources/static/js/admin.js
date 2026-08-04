@@ -1,5 +1,10 @@
 // Admin Dashboard Logic for EduAssign
 
+function cleanSubjectCode(id) {
+  if (!id) return '';
+  return id.includes('_') ? id.split('_')[0] : id;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   // 1. Session check
   const currentUser = checkSession(['ADMIN', 'SUPERADMIN']);
@@ -205,14 +210,18 @@ document.addEventListener('DOMContentLoaded', () => {
       populateCustomPrefDropdown();
 
       const academicYearInput = document.getElementById('pref-academic-year-input');
-      const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '2026-27';
+      const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '';
+
+      if (!academicYearVal) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 15px;">Please enter Academic Year to load selections.</td></tr>`;
+        pendingTbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 15px;">Please enter Academic Year.</td></tr>`;
+        return;
+      }
 
       const [faculty, subjects, allPreferences, sectionAllocs, selectionWindow] = await Promise.all([
         apiRequest('/adminfaculty/viewfaculty'),
         apiRequest('/subject/viewAll'),
-        academicYearVal 
-          ? apiRequest(`/faculty/preferences/by-academic-year?academicYear=${encodeURIComponent(academicYearVal)}`)
-          : apiRequest('/faculty/preferences/all'),
+        apiRequest(`/faculty/preferences/by-academic-year?academicYear=${encodeURIComponent(academicYearVal)}`),
         apiRequest('/adminfaculty/section-allocations'),
         apiRequest('/adminfaculty/deadline')
       ]);
@@ -854,9 +863,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const deptVal = document.getElementById('sub-dept-filter').value;
     const yearVal = document.getElementById('sub-year-filter').value;
     const semVal = document.getElementById('sub-sem-filter').value;
+    const acadYearEl = document.getElementById('sub-academic-year-filter');
+    const acadYearVal = acadYearEl ? acadYearEl.value.trim() : '';
 
-    if (!deptVal || !yearVal || !semVal) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 15px;">Please select Department, Academic Year, and Semester to view subjects.</td></tr>`;
+    if (!deptVal || !yearVal || !semVal || !acadYearVal) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 15px;">Please select Department, Year & Semester, and enter Academic Year to view subjects.</td></tr>`;
       return;
     }
 
@@ -870,7 +881,8 @@ document.addEventListener('DOMContentLoaded', () => {
     filteredList = filteredList.filter(s => 
       getSubjectDeptCode(s) === deptVal.toUpperCase() &&
       Number(s.year) === Number(yearVal) &&
-      Number(s.sem) === Number(semVal)
+      Number(s.sem) === Number(semVal) &&
+      s.academicYear && s.academicYear.toLowerCase().includes(acadYearVal.toLowerCase())
     );
 
     if (filteredList.length === 0) {
@@ -950,6 +962,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sub-dept-filter').addEventListener('change', handleSubjectFilterChange);
   document.getElementById('sub-year-filter').addEventListener('change', handleSubjectFilterChange);
   document.getElementById('sub-sem-filter').addEventListener('change', handleSubjectFilterChange);
+  
+  const subAcadYearFilter = document.getElementById('sub-academic-year-filter');
+  if (subAcadYearFilter) {
+    subAcadYearFilter.addEventListener('input', handleSubjectFilterChange);
+  }
 
   // Removed change listener for section-dept-select to prevent loading table data when adding sections
 
@@ -1873,7 +1890,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         );
       }
 
-      const activeSubjectIds = new Set(subjectsInWindow.map(s => s.id.toUpperCase()));
+      const activeSubjectIds = new Set(subjectsInWindow.map(s => s.id ? s.id.toUpperCase() : ''));
 
       // Total Subjects
       const totalSubjects = subjectsInWindow.length;
@@ -1908,7 +1925,9 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
 
       const secAllocMap = {};
       secList.forEach(sa => {
-        secAllocMap[sa.subjectId.toUpperCase() + "_" + sa.sectionName.toUpperCase()] = sa;
+        if (sa.subjectId && sa.sectionName) {
+          secAllocMap[sa.subjectId.toUpperCase() + "_" + sa.sectionName.toUpperCase()] = sa;
+        }
       });
 
       if (selectionWindow && selectionWindow.department) {
@@ -1922,9 +1941,11 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         activeSections.forEach(sec => {
           let isSectionFullyAllocated = true;
           subjectsInWindow.forEach(sub => {
-            const key = sub.id.toUpperCase() + "_" + sec.sectionName.toUpperCase();
-            if (!secAllocMap[key]) {
-              isSectionFullyAllocated = false;
+            if (sub.id && sec.sectionName) {
+              const key = sub.id.toUpperCase() + "_" + sec.sectionName.toUpperCase();
+              if (!secAllocMap[key]) {
+                isSectionFullyAllocated = false;
+              }
             }
           });
           if (!isSectionFullyAllocated) {
@@ -1937,15 +1958,15 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       document.getElementById('stats-pending-sections').innerText = pendingSections;
 
       // Count allocated subjects in window (distinct)
-      const allocatedInWindow = allocList.filter(a => activeSubjectIds.has(a.subjectId.toUpperCase()));
-      const distinctAllocatedSubjectIds = new Set(allocatedInWindow.map(a => a.subjectId.toUpperCase()));
+      const allocatedInWindow = allocList.filter(a => a.subjectId && activeSubjectIds.has(a.subjectId.toUpperCase()));
+      const distinctAllocatedSubjectIds = new Set(allocatedInWindow.map(a => a.subjectId ? a.subjectId.toUpperCase() : ''));
       document.getElementById('stats-allocated-subjects').innerText = distinctAllocatedSubjectIds.size;
 
       // Count Regular vs Mock allocated subjects in window
       let regAllocated = 0;
       let mockAllocated = 0;
       distinctAllocatedSubjectIds.forEach(subId => {
-        const sub = subjectsInWindow.find(s => s.id.toUpperCase() === subId);
+        const sub = subjectsInWindow.find(s => s.id && s.id.toUpperCase() === subId);
         if (sub) {
           if (sub.mock) {
             mockAllocated++;
@@ -1995,10 +2016,10 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
           (selectionWindow.academicYear == null || (s.academicYear && s.academicYear.toLowerCase() === selectionWindow.academicYear.toLowerCase()))
         );
       }
-      const activeSubjectIds = new Set(subjectsInWindow.map(s => s.id.toUpperCase()));
+      const activeSubjectIds = new Set(subjectsInWindow.map(s => s.id ? s.id.toUpperCase() : ''));
 
-      const facAllocs = allocList.filter(a => a.facultyId.toUpperCase() === facId.toUpperCase() && activeSubjectIds.has(a.subjectId.toUpperCase()));
-      const facSecAllocs = secList.filter(sa => sa.facultyId.toUpperCase() === facId.toUpperCase() && activeSubjectIds.has(sa.subjectId.toUpperCase()));
+      const facAllocs = allocList.filter(a => a.facultyId && a.subjectId && a.facultyId.toUpperCase() === facId.toUpperCase() && activeSubjectIds.has(a.subjectId.toUpperCase()));
+      const facSecAllocs = secList.filter(sa => sa.facultyId && sa.subjectId && sa.facultyId.toUpperCase() === facId.toUpperCase() && activeSubjectIds.has(sa.subjectId.toUpperCase()));
 
       const workloadLimitInput = document.getElementById('page-hours-limit');
       const subjectHoursInput = document.getElementById('page-subject-hours');
@@ -2011,7 +2032,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       let regularCount = 0;
       let mockCount = 0;
       facAllocs.forEach(a => {
-        const sub = subjectsInWindow.find(s => s.id.toUpperCase() === a.subjectId.toUpperCase());
+        const sub = subjectsInWindow.find(s => s.id && a.subjectId && s.id.toUpperCase() === a.subjectId.toUpperCase());
         if (sub) {
           if (sub.mock) {
             mockCount++;
@@ -2138,7 +2159,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
             secLabel = ` (Allocated: Sec ${matchedSecs.map(s => s.sectionName).join(', ')})`;
           }
 
-          li.innerText = `${p.subjectId} - ${subName}${isMock ? ' (Mock)' : ''}${secLabel}`;
+          li.innerText = `${cleanSubjectCode(p.subjectId)} - ${subName}${isMock ? ' (Mock)' : ''}${secLabel}`;
           if (isMock) {
             li.style.color = 'var(--primary)';
           }
@@ -2221,31 +2242,37 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
           (selectionWindow.academicYear == null || (s.academicYear && s.academicYear.toLowerCase() === selectionWindow.academicYear.toLowerCase()))
         );
       }
-      const activeSubjectIds = new Set(filteredSubList.map(s => s.id.toUpperCase()));
+      const activeSubjectIds = new Set(filteredSubList.map(s => s.id ? s.id.toUpperCase() : ''));
 
       const allocList = (Array.isArray(allocations) ? allocations : [])
-        .filter(a => activeSubjectIds.has(a.subjectId.toUpperCase()));
+        .filter(a => a.subjectId && activeSubjectIds.has(a.subjectId.toUpperCase()));
       const secList = (Array.isArray(sectionAllocs) ? sectionAllocs : [])
-        .filter(sa => activeSubjectIds.has(sa.subjectId.toUpperCase()));
+        .filter(sa => sa.subjectId && activeSubjectIds.has(sa.subjectId.toUpperCase()));
       const facList = Array.isArray(faculty) ? faculty : [];
 
       const facultyMap = {};
-      facList.forEach(f => facultyMap[f.id] = f.name);
+      facList.forEach(f => {
+        if (f.id) facultyMap[f.id] = f.name;
+      });
 
       const subjectsMap = {};
-      subList.forEach(s => subjectsMap[s.id] = s);
+      subList.forEach(s => {
+        if (s.id) subjectsMap[s.id] = s;
+      });
 
       const sectionMap = {};
       secList.forEach(sa => {
-        const key = sa.facultyId.toUpperCase() + "_" + sa.subjectId.toUpperCase();
-        if (!sectionMap[key]) {
-          sectionMap[key] = [];
+        if (sa.facultyId && sa.subjectId) {
+          const key = sa.facultyId.toUpperCase() + "_" + sa.subjectId.toUpperCase();
+          if (!sectionMap[key]) {
+            sectionMap[key] = [];
+          }
+          sectionMap[key].push({ id: sa.id, name: sa.sectionName });
         }
-        sectionMap[key].push({ id: sa.id, name: sa.sectionName });
       });
 
       tbody.innerHTML = '';
-      const validAllocList = allocList.filter(alloc => facultyMap[alloc.facultyId]);
+      const validAllocList = allocList.filter(alloc => alloc.facultyId && facultyMap[alloc.facultyId]);
       if (secList.length === 0) {
         tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted);">No subject allocations.</td></tr>`;
         return;
@@ -2279,7 +2306,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
           tr.innerHTML = `
             <td><strong>${sa.facultyId}</strong><br><span style="font-size: 0.85rem; color: var(--text-muted);">${facName}</span></td>
             <td>
-              <strong>${sa.subjectId}</strong><br>
+              <strong>${cleanSubjectCode(sa.subjectId)}</strong><br>
               <span style="font-size: 0.85rem; color: var(--text-muted);">${sub.name}</span>
             </td>
           `;
@@ -2295,7 +2322,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
           const facName = facultyMap[alloc.facultyId] || 'Unknown';
           return {
             value: alloc.id,
-            text: `${facName} (${alloc.facultyId}) <-> ${sub.name} (${alloc.subjectId})`
+            text: `${facName} (${alloc.facultyId}) <-> ${sub.name} (${cleanSubjectCode(alloc.subjectId)})`
           };
         });
         populateSelect(swapSelect1, swapOptions, 'Allocation 1...');
@@ -2322,12 +2349,18 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         const activeAcademicYear = (selectionWindow && selectionWindow.academicYear) ? selectionWindow.academicYear.trim().toLowerCase() : '';
         const prefsForActiveYear = (Array.isArray(preferences) ? preferences : []).filter(p => {
           if (!activeAcademicYear) return true;
-          const sub = subList.find(s => s.id.toLowerCase() === p.subjectId.toLowerCase());
+          if (!p.subjectId) return false;
+          const sub = subList.find(s => s.id && s.id.toLowerCase() === p.subjectId.toLowerCase());
           return sub && sub.academicYear && sub.academicYear.toLowerCase() === activeAcademicYear;
         });
-        const facultyWhoSubmittedPrefs = new Set(prefsForActiveYear.map(p => p.facultyId.toUpperCase()));
+        const facultyWhoSubmittedPrefs = new Set(
+          prefsForActiveYear
+            .filter(p => p.facultyId)
+            .map(p => p.facultyId.toUpperCase())
+        );
 
         const unallocatedFaculties = facList.filter(f => {
+          if (!f.id) return false;
           const isSuper = f.role && f.role.toUpperCase() === 'SUPERADMIN';
           const isNotAllocated = !allocatedIds.has(f.id.toUpperCase());
           const submittedPrefs = facultyWhoSubmittedPrefs.has(f.id.toUpperCase());
@@ -2351,7 +2384,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       }
     } catch (error) {
       console.error(error);
-      tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--error);">Failed to load subject allocations</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--error);">Failed to load subject allocations: ${error.message}</td></tr>`;
     }
   }
 
@@ -2619,6 +2652,12 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       params.append('maxSubjects', maxSubjects);
       params.append('maxRegular', maxRegular);
       params.append('maxMock', maxMock);
+
+      if (selectionWindow) {
+        if (selectionWindow.academicYear) params.append('academicYear', selectionWindow.academicYear);
+        if (selectionWindow.department) params.append('department', selectionWindow.department);
+        if (selectionWindow.sem) params.append('sem', selectionWindow.sem);
+      }
       
       const selectedYearCbs = document.querySelectorAll('.allocate-year-checkbox:checked');
       const selectedYears = Array.from(selectedYearCbs).map(cb => Number(cb.value));
@@ -3599,7 +3638,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         if (!allocs || allocs.length === 0) return '-';
         return allocs.map(a => {
           const secName = a.sectionName && a.sectionName !== 'N/A' ? ` - Sec ${a.sectionName}` : '';
-          return `${cleanSubjectName(a.subjectName)} (${a.subjectId}${secName})`;
+          return `${cleanSubjectName(a.subjectName)} (${cleanSubjectCode(a.subjectId)}${secName})`;
         }).join('; ');
       };
 
@@ -3821,7 +3860,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
           const facSelect = document.getElementById('alloc-faculty-select');
           if (facSelect) {
             facSelect.value = '';
-            const loadDetails = document.getElementById('faculty-load-details');
+            const loadDetails = document.getElementById('selected-faculty-load-details');
             if (loadDetails) loadDetails.innerHTML = '';
           }
         } catch (err) {
@@ -3980,7 +4019,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
           const p = prefsList[i];
           const sub = data.subjectsMap[p.subjectId];
           if (sub) {
-            tableHtml += `<td>${sub.name} (${sub.id})</td>`;
+            tableHtml += `<td>${sub.name} (${cleanSubjectCode(sub.id)})</td>`;
           } else {
             tableHtml += '<td></td>';
           }
@@ -4099,7 +4138,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       });
       showToast('Allocations Swapped', 'Selected allocations swapped successfully.', 'success');
       loadSubjectAllocations();
-      loadSectionAllocations();
+      calculateAllocationStats();
     } catch (error) {
       showToast('Swap Failed', error.message || 'Could not swap allocations.', 'error');
     }

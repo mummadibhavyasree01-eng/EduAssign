@@ -27,14 +27,16 @@ public class SubjectController {
     @PostMapping("/add")
     public ResponseEntity<?> addSubject(
             @RequestBody Subject subject) {
-        if (subject.getId() == null || subject.getId().trim().isEmpty()) {
-            return ResponseEntity.badRequest().body("Subject code is required");
-        }
-        if (subjectService.viewSubjectById(subject.getId().trim()) != null) {
+        String subjectCode = subject.getId().trim();
+        String acadYear = (subject.getAcademicYear() != null && !subject.getAcademicYear().trim().isEmpty())
+                ? subject.getAcademicYear().trim() : "2026-27";
+        String compoundId = subjectCode + "_" + acadYear;
+
+        if (subjectService.viewSubjectById(compoundId) != null) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body("Already there is a subject with that subjectcode");
+                    .body("Already there is a subject with that subjectcode in the " + acadYear + " academic year");
         }
-        subject.setId(subject.getId().trim());
+        subject.setId(compoundId);
         return ResponseEntity.ok(
                 subjectService.addSubject(subject));
     }

@@ -85,12 +85,18 @@ public class SubjectService {
             return null;
         }
 
-        String newId = updatedSubject.getId();
-        if (newId != null && !newId.trim().isEmpty() && !newId.equalsIgnoreCase(id)) {
+        String newSubjectCode = updatedSubject.getId();
+        if (newSubjectCode != null && newSubjectCode.contains("_")) {
+            newSubjectCode = newSubjectCode.split("_")[0];
+        }
+        String newAcadYear = updatedSubject.getAcademicYear() != null ? updatedSubject.getAcademicYear().trim() : subject.getAcademicYear();
+        String newId = (newSubjectCode != null && !newSubjectCode.trim().isEmpty()) ? (newSubjectCode.trim() + "_" + newAcadYear) : id;
+
+        if (!newId.equalsIgnoreCase(id)) {
             newId = newId.trim();
             // Check if another subject already exists with the new ID
             if (subjectRepository.existsById(newId)) {
-                throw new IllegalArgumentException("Already there is a subject with that subjectcode");
+                throw new IllegalArgumentException("Already there is a subject with that subjectcode in the " + newAcadYear + " academic year");
             }
             
             // Delete the old subject record
@@ -150,18 +156,20 @@ public class SubjectService {
                 }
 
                 Subject subject = new Subject();
-                subject.setId(getCellValueAsString(row.getCell(0)));
+                String subjectCode = getCellValueAsString(row.getCell(0)).trim();
+                
+                String acadYear = "2026-27";
+                if (row.getLastCellNum() > 6 && row.getCell(6) != null) {
+                    acadYear = getCellValueAsString(row.getCell(6)).trim();
+                }
+                subject.setAcademicYear(acadYear);
+                subject.setId(subjectCode + "_" + acadYear);
+
                 subject.setName(getCellValueAsString(row.getCell(1)));
                 subject.setYear(getCellValueAsInt(row.getCell(2)));
                 subject.setSem(getCellValueAsInt(row.getCell(3)));
                 subject.setDep(getCellValueAsString(row.getCell(4)));
                 subject.setRegulation(getCellValueAsString(row.getCell(5)));
-
-                if (row.getLastCellNum() > 6 && row.getCell(6) != null) {
-                    subject.setAcademicYear(getCellValueAsString(row.getCell(6)));
-                } else {
-                    subject.setAcademicYear("2026-27");
-                }
 
                 if (row.getLastCellNum() > 7 && row.getCell(7) != null) {
                     String typeVal = getCellValueAsString(row.getCell(7)).trim();
@@ -254,53 +262,64 @@ public class SubjectService {
             String message, int days, Integer sem, String academicYear, String department,
             List<Integer> years, Integer hoursPerWeek, Integer maxSubjectsAllocated,
             Integer subjectHoursPerWeek, Integer maxRegularPreferences, Integer maxMockPreferences) {
-        List<SubjectSelectionWindow> allWindows = windowRepository.findAll();
-        for (SubjectSelectionWindow w : allWindows) {
-            w.setActive(false);
-            windowRepository.save(w);
+        
+        java.util.Set<Integer> selectedYears = new java.util.HashSet<>();
+        if (years != null) {
+            selectedYears.addAll(years);
         }
-        int idCounter = 1;
-        for (SubjectSelectionWindow w : allWindows) {
-            if (w.getId() >= idCounter) {
-                idCounter = w.getId() + 1;
+
+        for (int y = 1; y <= 4; y++) {
+            if (selectedYears.contains(y)) {
+                SubjectSelectionWindow window = windowRepository.findById(y).orElse(new SubjectSelectionWindow());
+                window.setId(y);
+                window.setYear(y);
+                window.setMessage(message);
+                window.setDeadline(LocalDateTime.now().plusDays(days));
+                window.setActive(true);
+                window.setSem(sem);
+                window.setAcademicYear(academicYear);
+                window.setDepartment(department);
+                window.setHoursPerWeek(hoursPerWeek);
+                window.setMaxSubjectsAllocated(maxSubjectsAllocated);
+                window.setSubjectHoursPerWeek(subjectHoursPerWeek);
+                window.setMaxRegularPreferences(maxRegularPreferences);
+                window.setMaxMockPreferences(maxMockPreferences);
+                windowRepository.save(window);
+            } else {
+                SubjectSelectionWindow window = windowRepository.findById(y).orElse(null);
+                if (window != null) {
+                    window.setActive(false);
+                    window.setAcademicYear(null);
+                    window.setDepartment(null);
+                    window.setSem(null);
+                    windowRepository.save(window);
+                }
             }
-        }
-        for (Integer year : years) {
-            SubjectSelectionWindow window = allWindows.stream()
-                    .filter(w -> year.equals(w.getYear()))
-                    .findFirst().orElse(null);
-            if (window == null) {
-                window = new SubjectSelectionWindow();
-                window.setId(idCounter++);
-            }
-            window.setMessage(message);
-            window.setDeadline(LocalDateTime.now().plusDays(days));
-            window.setActive(true);
-            window.setSem(sem);
-            window.setAcademicYear(academicYear);
-            window.setDepartment(department);
-            window.setYear(year);
-            window.setHoursPerWeek(hoursPerWeek);
-            window.setMaxSubjectsAllocated(maxSubjectsAllocated);
-            window.setSubjectHoursPerWeek(subjectHoursPerWeek);
-            window.setMaxRegularPreferences(maxRegularPreferences);
-            window.setMaxMockPreferences(maxMockPreferences);
-            windowRepository.save(window);
         }
     }
 
     public SubjectSelectionWindow getActiveDeadline() {
-        return windowRepository.findTopByOrderByIdDesc();
+        return windowRepository.findAll().stream()
+                .filter(w -> w.isActive() && LocalDateTime.now().isBefore(w.getDeadline()))
+                .findFirst()
+                .orElse(null);
     }
 
     public boolean isBeforeDeadline() {
         List<SubjectSelectionWindow> windows = windowRepository.findAll();
-        for (SubjectSelectionWindow window : windows) {
-            if (window.isActive() && LocalDateTime.now().isBefore(window.getDeadline())) {
+        for (SubjectSelectionWindow w : windows) {
+            if (w.isActive() && LocalDateTime.now().isBefore(w.getDeadline())) {
                 return true;
             }
         }
         return false;
+    }
+
+    public boolean isBeforeDeadlineForYear(Integer year) {
+        if (year == null) return isBeforeDeadline();
+        return windowRepository.findById(year)
+                .map(w -> w.isActive() && LocalDateTime.now().isBefore(w.getDeadline()))
+                .orElse(false);
     }
 
     // ----------------------------------------------------
@@ -326,19 +345,20 @@ public class SubjectService {
         if (allocation.getFacultyId() == null || allocation.getSubjectId() == null) {
             throw new IllegalArgumentException("Faculty ID and Subject ID are required.");
         }
-        if (isBeforeDeadline()) {
-            throw new IllegalStateException("The subject selection window is currently running. Please click 'Stop Selection Window' on the Selection Window tab before performing allocations.");
+
+        Subject subject = subjectRepository.findById(allocation.getSubjectId()).orElse(null);
+        if (subject == null) {
+            throw new IllegalArgumentException("Subject not found.");
+        }
+
+        if (isBeforeDeadlineForYear(subject.getYear())) {
+            throw new IllegalStateException("The subject selection window is currently running for Year " + subject.getYear() + ". Please stop it on the Selection Window tab before performing allocations.");
         }
 
         SubjectAllocation existingAlloc = allocationRepository.findBySubjectIdAndFacultyId(
                 allocation.getSubjectId(), allocation.getFacultyId());
         if (existingAlloc != null) {
             throw new IllegalArgumentException("This faculty member is already allocated to this subject.");
-        }
-
-        Subject subject = subjectRepository.findById(allocation.getSubjectId()).orElse(null);
-        if (subject == null) {
-            throw new IllegalArgumentException("Subject not found.");
         }
 
         // Validate selection window limits (max subjects and hours)
@@ -407,7 +427,8 @@ public class SubjectService {
         String subDeptCode = getSubjectDepartmentCode(subject);
         List<Section> sections = sectionRepository.findAll().stream()
                 .filter(s -> s.getYearNumber() != null && s.getYearNumber().equals(subject.getYear()) &&
-                             s.getDepartmentCode() != null && s.getDepartmentCode().equalsIgnoreCase(subDeptCode))
+                             s.getDepartmentCode() != null && s.getDepartmentCode().equalsIgnoreCase(subDeptCode) &&
+                             (subject.getAcademicYear() == null || s.getAcademicYear() == null || s.getAcademicYear().equalsIgnoreCase(subject.getAcademicYear())))
                 .collect(Collectors.toList());
         int maxAllocations = Math.max(1, sections.size());
 
@@ -489,12 +510,13 @@ public class SubjectService {
         if (allocation.getFacultyId() == null || allocation.getSubjectId() == null || allocation.getSectionName() == null) {
             throw new IllegalArgumentException("Faculty ID, Subject ID, and Section Name are all required.");
         }
-        if (isBeforeDeadline()) {
-            throw new IllegalStateException("The subject selection window is currently running. Please click 'Stop Selection Window' on the Selection Window tab before performing allocations.");
-        }
 
         Subject subject = subjectRepository.findById(allocation.getSubjectId())
                 .orElseThrow(() -> new IllegalArgumentException("Subject not found."));
+
+        if (isBeforeDeadlineForYear(subject.getYear())) {
+            throw new IllegalStateException("The subject selection window is currently running for Year " + subject.getYear() + ". Please stop it on the Selection Window tab before performing allocations.");
+        }
 
         SubjectSelectionWindow window = windowRepository.findAll().stream()
                 .filter(w -> w.isActive() && Integer.valueOf(subject.getYear()).equals(w.getYear()))
@@ -882,47 +904,23 @@ public class SubjectService {
     }
 
     @Transactional
-    public List<SubjectAllocation> autoAllocateSubjects(Integer hoursLimit, Integer subjectHours, Integer maxSubjects, Integer maxRegular, Integer maxMock, String academicYear, String department, Integer sem, List<Integer> years) {
-        if (isBeforeDeadline()) {
-            throw new IllegalStateException("The subject selection window is currently running. Please click 'Stop Selection Window' on the Selection Window tab before performing allocations.");
-        }
-
+    public List<SubjectAllocation> autoAllocateForYear(Integer targetYear, Integer hoursLimit, Integer subjectHours, Integer maxSubjects, Integer maxRegular, Integer maxMock, String academicYear, String department, Integer sem) {
+        SubjectSelectionWindow window = windowRepository.findById(targetYear).orElse(null);
         List<Subject> allSubjects = subjectRepository.findAll();
         if (allSubjects.isEmpty()) {
             throw new IllegalStateException("No subjects found in the Subject Directory. Please add or import subjects first.");
         }
 
-        List<SubjectSelectionWindow> activeWindows = windowRepository.findAll().stream()
-                .filter(SubjectSelectionWindow::isActive)
-                .collect(Collectors.toList());
-        for (SubjectSelectionWindow w : activeWindows) {
-            if (hoursLimit != null) w.setHoursPerWeek(hoursLimit);
-            if (subjectHours != null) w.setSubjectHoursPerWeek(subjectHours);
-            if (maxSubjects != null) w.setMaxSubjectsAllocated(maxSubjects);
-            windowRepository.save(w);
-        }
-
-        SubjectSelectionWindow window = windowRepository.findTopByOrderByIdDesc();
         String currentAcademicYear = (academicYear != null && !academicYear.trim().isEmpty()) ? academicYear.trim() : ((window != null && window.getAcademicYear() != null) ? window.getAcademicYear().trim() : "");
         String filterDepartment = (department != null && !department.trim().isEmpty()) ? department.trim() : (window != null ? window.getDepartment() : null);
         Integer filterSem = (sem != null) ? sem : (window != null ? window.getSem() : null);
-        
-        final List<Integer> finalFilterYears;
-        if (years == null || years.isEmpty()) {
-            if (window != null && window.getYear() != null && window.getYear() != 0) {
-                finalFilterYears = List.of(window.getYear());
-            } else {
-                finalFilterYears = java.util.Collections.emptyList();
-            }
-        } else {
-            finalFilterYears = years;
-        }
+        Integer filterYear = targetYear;
 
         List<Subject> subjects = allSubjects.stream()
             .filter(s -> (filterSem == null || NumberHelperIsEqual(s.getSem(), filterSem)) &&
                          (filterDepartment == null || filterDepartment.equalsIgnoreCase(getSubjectDepartmentCode(s))) &&
                          (currentAcademicYear.isEmpty() || currentAcademicYear.equalsIgnoreCase(s.getAcademicYear())) &&
-                         (finalFilterYears.isEmpty() || finalFilterYears.contains(s.getYear())))
+                         NumberHelperIsEqual(s.getYear(), filterYear))
             .collect(Collectors.toList());
 
         if (subjects.isEmpty()) {
@@ -1183,11 +1181,17 @@ public class SubjectService {
         // Compile all preferences into an ordered list across all faculty
         List<FacultySubjectPreference> orderedPrefs = new ArrayList<>(allPreferences);
         orderedPrefs.sort((p1, p2) -> {
+            // First, process regular preferences (p.isMock() = false) before mock preferences (p.isMock() = true)
+            if (p1.isMock() != p2.isMock()) {
+                return Boolean.compare(p1.isMock(), p2.isMock());
+            }
+            // Second, sort by rank (0, 1, 2, ...) within their respective categories
             int rank1 = preferenceRanks.getOrDefault(p1.getId(), 999);
             int rank2 = preferenceRanks.getOrDefault(p2.getId(), 999);
             if (rank1 != rank2) {
                 return Integer.compare(rank1, rank2);
             }
+            // Third, sort by first-come-first-serve submission order
             Long o1 = facultySubmissionOrder.getOrDefault(p1.getFacultyId().toUpperCase(), Long.MAX_VALUE);
             Long o2 = facultySubmissionOrder.getOrDefault(p2.getFacultyId().toUpperCase(), Long.MAX_VALUE);
             return o1.compareTo(o2);
@@ -1363,8 +1367,9 @@ public class SubjectService {
                             continue;
                         }
                         if (sub.isMock()) {
+                            int regCount = facultyRegularCount.getOrDefault(fIdUpper, 0);
                             int mockCount = facultyMockCount.getOrDefault(fIdUpper, 0);
-                            if (mockCount >= maxMockVal) {
+                            if (regCount != maxRegVal || mockCount >= maxMockVal || hasPreviousMockAllocation(f.getId())) {
                                 continue;
                             }
                         } else {
@@ -1489,6 +1494,81 @@ public class SubjectService {
         return allocationRepository.findAll().stream()
                 .filter(a -> !a.isFinalized() && targetSubjectIds.contains(a.getSubjectId()))
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<SubjectAllocation> autoAllocateSubjects(Integer hoursLimit, Integer subjectHours, Integer maxSubjects, Integer maxRegular, Integer maxMock, String academicYear, String department, Integer sem, List<Integer> years) {
+        SubjectSelectionWindow refWindow = windowRepository.findAll().stream()
+                .filter(w -> w.getAcademicYear() != null && !w.getAcademicYear().trim().isEmpty())
+                .max(java.util.Comparator.comparing(SubjectSelectionWindow::getDeadline))
+                .orElse(windowRepository.findTopByOrderByIdDesc());
+
+        String currentAcademicYear = (academicYear != null && !academicYear.trim().isEmpty()) ? academicYear.trim() : ((refWindow != null && refWindow.getAcademicYear() != null) ? refWindow.getAcademicYear().trim() : "2026-27");
+        String filterDepartment = (department != null && !department.trim().isEmpty()) ? department.trim() : (refWindow != null ? refWindow.getDepartment() : "CSE");
+        Integer filterSem = (sem != null) ? sem : (refWindow != null ? refWindow.getSem() : 1);
+
+        // Update the active windows with the parameters for manual editing
+        for (int y = 1; y <= 4; y++) {
+            windowRepository.findById(y).ifPresent(w -> {
+                if (w.isActive()) {
+                    if (hoursLimit != null) w.setHoursPerWeek(hoursLimit);
+                    if (subjectHours != null) w.setSubjectHoursPerWeek(subjectHours);
+                    if (maxSubjects != null) w.setMaxSubjectsAllocated(maxSubjects);
+                    windowRepository.save(w);
+                }
+            });
+        }
+
+        List<Integer> activeYears = new ArrayList<>();
+        if (years != null && !years.isEmpty()) {
+            activeYears.addAll(years);
+        } else {
+            activeYears = windowRepository.findAll().stream()
+                    .filter(w -> w.getAcademicYear() != null && w.getAcademicYear().equalsIgnoreCase(currentAcademicYear) &&
+                                 w.getDepartment() != null && w.getDepartment().equalsIgnoreCase(filterDepartment) &&
+                                 w.getSem() != null && w.getSem().equals(filterSem))
+                    .map(SubjectSelectionWindow::getYear)
+                    .sorted()
+                    .collect(Collectors.toList());
+
+            if (activeYears.isEmpty()) {
+                if (refWindow != null && refWindow.getYear() != null) {
+                    activeYears.add(refWindow.getYear());
+                } else {
+                    activeYears = java.util.Arrays.asList(1, 2, 3, 4);
+                }
+            }
+        }
+
+        // Only enforce selection window deadline checks for the target years actually being allocated
+        for (Integer targetYear : activeYears) {
+            if (isBeforeDeadlineForYear(targetYear)) {
+                throw new IllegalStateException("The subject selection window is currently running for Year " + targetYear + ". Please click 'Stop Selection Window' on the Selection Window tab before performing allocations.");
+            }
+        }
+
+        List<Subject> allSubjects = subjectRepository.findAll();
+        List<SubjectAllocation> allAllocs = new java.util.ArrayList<>();
+        boolean processedAnySubjects = false;
+
+        for (Integer targetYear : activeYears) {
+            boolean hasSubs = allSubjects.stream().anyMatch(s -> 
+                (filterSem == null || NumberHelperIsEqual(s.getSem(), filterSem)) &&
+                (filterDepartment == null || filterDepartment.equalsIgnoreCase(getSubjectDepartmentCode(s))) &&
+                (currentAcademicYear.isEmpty() || currentAcademicYear.equalsIgnoreCase(s.getAcademicYear())) &&
+                NumberHelperIsEqual(s.getYear(), targetYear)
+            );
+            if (hasSubs) {
+                processedAnySubjects = true;
+                allAllocs.addAll(autoAllocateForYear(targetYear, hoursLimit, subjectHours, maxSubjects, maxRegular, maxMock, currentAcademicYear, filterDepartment, filterSem));
+            }
+        }
+
+        if (!processedAnySubjects) {
+            throw new IllegalStateException("No subjects found matching the selected Academic Year, Department, Semester, and Year(s).");
+        }
+
+        return allAllocs;
     }
 
     private boolean NumberHelperIsEqual(int a, Integer b) {
@@ -1619,8 +1699,8 @@ public class SubjectService {
     }
 
     public void stopDeadline(Integer year) {
+        List<SubjectSelectionWindow> windows = windowRepository.findAll();
         if (year != null) {
-            List<SubjectSelectionWindow> windows = windowRepository.findAll();
             for (SubjectSelectionWindow w : windows) {
                 if (w.isActive() && year.equals(w.getYear())) {
                     w.setActive(false);
@@ -1628,10 +1708,11 @@ public class SubjectService {
                 }
             }
         } else {
-            SubjectSelectionWindow window = windowRepository.findTopByOrderByIdDesc();
-            if (window != null) {
-                window.setActive(false);
-                windowRepository.save(window);
+            for (SubjectSelectionWindow w : windows) {
+                if (w.isActive()) {
+                    w.setActive(false);
+                    windowRepository.save(w);
+                }
             }
         }
     }

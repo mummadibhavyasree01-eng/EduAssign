@@ -180,7 +180,7 @@
               <input type="text" id="subject-search" class="form-control" placeholder="Search subjects by code, name, department...">
             </div>
 
-            <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 600px;">
+            <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; max-width: 800px;">
               <div style="flex: 1; max-width: 130px;">
                 <select id="sub-category-filter" class="form-control" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px;">
                   <option value="regular" selected>Regular</option>
@@ -202,6 +202,9 @@
                     <!-- Populated dynamically via JS -->
                   </div>
                 </div>
+              </div>
+              <div style="flex: 1; max-width: 180px;">
+                <input type="text" id="sub-academic-year-filter" class="form-control" placeholder="Academic Year" style="height: 38px; font-size: 0.9rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); color: var(--text-main); padding: 8px 12px;">
               </div>
               <!-- Hidden native selects to retain compatibility -->
               <select id="sub-year-filter" style="display: none;">
@@ -984,7 +987,7 @@
   </style>
 
   <!-- Scripts -->
-  <script src="js/common.js?v=6"></script>
-  <script src="js/admin.js?v=6"></script>
+  <script src="js/common.js?v=7"></script>
+  <script src="js/admin.js?v=7"></script>
 </body>
 </html>

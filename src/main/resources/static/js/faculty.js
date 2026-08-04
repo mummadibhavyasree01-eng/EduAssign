@@ -592,7 +592,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <input type="checkbox" id="chk-${sub.id}" value="${sub.id}" ${isChecked ? 'checked' : ''} ${isSelDisabled ? 'disabled' : ''} style="display: none;">
           <div class="pref-index-indicator"></div>
           <div class="subject-details">
-            <span>${sub.name} <code style="color: var(--text-muted); font-size: 0.82rem; font-weight: normal; margin-left: 6px;">${sub.id}</code>
+            <span>${sub.name} <code style="color: var(--text-muted); font-size: 0.82rem; font-weight: normal; margin-left: 6px;">${cleanSubjectCode(sub.id)}</code>
               ${isAllocated ? '<span class="status-badge expired" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold;"><i class="fas fa-check-double"></i> Allocated</span>' : ''}
               ${isRegularSelectionDisabled && !isAllocated ? '<span class="status-badge progress" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold;"><i class="fas fa-lock"></i> Regular Completed</span>' : ''}
             </span>
@@ -674,7 +674,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <input type="checkbox" id="chk-mock-${sub.id}" value="${sub.id}" ${isChecked ? 'checked' : ''} ${isSelDisabled ? 'disabled' : ''} style="display: none;">
         <div class="mock-pref-indicator" style="font-weight: 700; color: var(--primary); font-size: 0.85rem; margin-right: 12px; min-width: 20px; text-align: center;">${isChecked ? 'Mock' : ''}</div>
         <div class="subject-details">
-          <span>${sub.name} <code style="color: var(--text-muted); font-size: 0.82rem; font-weight: normal; margin-left: 6px;">${sub.id}</code>
+          <span>${sub.name} <code style="color: var(--text-muted); font-size: 0.82rem; font-weight: normal; margin-left: 6px;">${cleanSubjectCode(sub.id)}</code>
             ${isAllocated ? '<span class="status-badge expired" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold;"><i class="fas fa-check-double"></i> Allocated</span>' : ''}
             ${isMockSelectionDisabled && !isAllocated ? '<span class="status-badge progress" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold;"><i class="fas fa-lock"></i> Mock Completed</span>' : ''}
           </span>
@@ -1054,13 +1054,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // First render Section Allocations (with specific Section names)
       secAllocList.forEach(alloc => {
-        const sub = subMap[alloc.subjectId] || { name: 'Subject: ' + alloc.subjectId, year: '?', dep: '?' };
+        const sub = subMap[alloc.subjectId] || { name: 'Subject: ' + cleanSubjectCode(alloc.subjectId), year: '?', dep: '?' };
         const item = document.createElement('div');
         item.className = 'allocation-item';
         item.innerHTML = `
           <div class="alloc-details">
             <h5>${sub.name}</h5>
-            <p>Code: ${alloc.subjectId} ${sub.year ? '• Year ' + sub.year + ' (' + sub.dep + ')' : ''}</p>
+            <p>Code: ${cleanSubjectCode(alloc.subjectId)} ${sub.year ? '• Year ' + sub.year + ' (' + sub.dep + ')' : ''}</p>
           </div>
           <span class="alloc-badge">Section ${alloc.sectionName}</span>
         `;
@@ -1071,13 +1071,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       const secSubjectIds = new Set(secAllocList.map(a => a.subjectId));
       subAllocList.forEach(alloc => {
         if (!secSubjectIds.has(alloc.subjectId)) {
-          const sub = subMap[alloc.subjectId] || { name: 'Subject: ' + alloc.subjectId, year: '?', dep: '?' };
+          const sub = subMap[alloc.subjectId] || { name: 'Subject: ' + cleanSubjectCode(alloc.subjectId), year: '?', dep: '?' };
           const item = document.createElement('div');
           item.className = 'allocation-item';
           item.innerHTML = `
             <div class="alloc-details">
               <h5>${sub.name}</h5>
-              <p>Code: ${alloc.subjectId} ${sub.year ? '• Year ' + sub.year + ' (' + sub.dep + ')' : ''}</p>
+              <p>Code: ${cleanSubjectCode(alloc.subjectId)} ${sub.year ? '• Year ' + sub.year + ' (' + sub.dep + ')' : ''}</p>
             </div>
             <span class="alloc-badge" style="background: rgba(99,102,241,0.15); color: var(--primary);">Allocated Subject</span>
           `;
