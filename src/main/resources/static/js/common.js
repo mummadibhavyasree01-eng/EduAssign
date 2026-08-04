@@ -187,3 +187,109 @@ function cleanSubjectName(name) {
     .replace(/\s*-\s*$/, '')
     .trim();
 }
+
+// Global Event Delegation for Password Toggle Eyes
+document.addEventListener('click', function(e) {
+  const toggle = e.target.closest('.password-toggle');
+  if (toggle) {
+    const input = toggle.parentNode.querySelector('input');
+    if (input) {
+      const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+      input.setAttribute('type', type);
+      const icon = toggle.querySelector('i');
+      if (icon) {
+        if (type === 'text') {
+          icon.className = 'fas fa-eye-slash';
+        } else {
+          icon.className = 'fas fa-eye';
+        }
+      }
+    }
+  }
+});
+
+// Update Header Avatar and Initials
+function updateHeaderAvatar(user) {
+  const avatarContainers = document.querySelectorAll('.user-avatar-wrapper');
+  avatarContainers.forEach(container => {
+    let img = container.querySelector('.header-avatar-img');
+    let initials = container.querySelector('.header-avatar-initials');
+    
+    // Create elements dynamically if they don't exist
+    if (!img) {
+      img = document.createElement('img');
+      img.className = 'header-avatar-img';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      img.style.borderRadius = '50%';
+      img.style.display = 'none';
+      container.appendChild(img);
+    }
+    if (!initials) {
+      initials = document.createElement('div');
+      initials.className = 'header-avatar-initials';
+      initials.style.width = '100%';
+      initials.style.height = '100%';
+      initials.style.borderRadius = '50%';
+      initials.style.display = 'none';
+      initials.style.alignItems = 'center';
+      initials.style.justifyContent = 'center';
+      initials.style.fontWeight = 'bold';
+      initials.style.background = 'var(--primary)';
+      initials.style.color = '#fff';
+      initials.style.fontSize = '0.9rem';
+      container.appendChild(initials);
+    }
+
+    if (user && user.profileImage) {
+      img.src = user.profileImage;
+      img.style.display = 'block';
+      initials.style.display = 'none';
+    } else {
+      img.style.display = 'none';
+      if (user) {
+        const nameParts = (user.name || 'U').trim().split(/\s+/);
+        const nameInitials = nameParts.map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        initials.innerText = nameInitials || 'U';
+      } else {
+        initials.innerText = 'U';
+      }
+      initials.style.display = 'flex';
+    }
+  });
+}
+
+function resizeAndCropImage(file, callback) {
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      canvas.width = 300;
+      canvas.height = 300;
+      
+      let srcX = 0;
+      let srcY = 0;
+      let srcWidth = img.width;
+      let srcHeight = img.height;
+      
+      if (img.width > img.height) {
+        srcWidth = img.height;
+        srcX = (img.width - img.height) / 2;
+      } else {
+        srcHeight = img.width;
+        srcY = (img.height - img.width) / 2;
+      }
+      
+      ctx.drawImage(img, srcX, srcY, srcWidth, srcHeight, 0, 0, 300, 300);
+      
+      const base64 = canvas.toDataURL('image/jpeg', 0.85);
+      callback(base64);
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
+}

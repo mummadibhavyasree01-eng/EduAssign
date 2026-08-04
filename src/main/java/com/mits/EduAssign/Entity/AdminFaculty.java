@@ -20,6 +20,9 @@ private String email;
 private String password;
 @Column(name="Role",nullable=false)
 private String role;
+@Column(name="ProfileImage", columnDefinition="LONGTEXT")
+private String profileImage;
+
 public void setId(String id) {
 	this.id=id;
 }
@@ -49,6 +52,12 @@ public String getPassword() {
 }
 public String getRole() {
 	return role;
+}
+public String getProfileImage() {
+	return profileImage;
+}
+public void setProfileImage(String profileImage) {
+	this.profileImage = profileImage;
 }
 }
 

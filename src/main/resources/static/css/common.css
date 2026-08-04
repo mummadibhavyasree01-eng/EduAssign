@@ -389,3 +389,166 @@ select option {
 .table tbody tr:hover {
   background: rgba(255, 255, 255, 0.02);
 }
+
+/* Password Toggle Styles */
+.password-toggle-wrapper {
+  position: relative;
+  width: 100%;
+}
+.password-toggle-wrapper input {
+  padding-right: 40px !important;
+}
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-smooth);
+}
+.password-toggle:hover {
+  color: var(--primary);
+}
+
+/* User Avatar Header Styles */
+.user-avatar-wrapper {
+  width: 40px;
+  height: 40px;
+  position: relative;
+  border-radius: 50%;
+  border: 2px solid var(--panel-border);
+  background: var(--panel-bg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+.user-avatar-wrapper:hover {
+  border-color: var(--primary);
+}
+.header-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.header-avatar-initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  background: var(--primary-gradient);
+  color: #ffffff;
+}
+
+/* Profile Photo Upload Widget Styles (WhatsApp Style) */
+.profile-photo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.profile-avatar-preview-wrapper {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  background: var(--panel-bg);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.profile-avatar-preview-wrapper:hover {
+  border-color: var(--primary);
+  transform: scale(1.03);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), var(--glow-shadow);
+}
+
+.profile-avatar-preview-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Hover overlay inside the circular avatar */
+.avatar-hover-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  color: white;
+  text-align: center;
+  padding: 10px;
+}
+
+.profile-avatar-preview-wrapper:hover .avatar-hover-overlay {
+  opacity: 1;
+}
+
+.avatar-hover-overlay i {
+  font-size: 1.8rem;
+  margin-bottom: 6px;
+  color: var(--primary-light);
+}
+
+.avatar-hover-overlay span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+}
+
+.profile-avatar-preview-wrapper .header-avatar-initials {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--primary-light);
+}
+
+.photo-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: var(--border-radius-sm);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.photo-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  transform: translateY(-1px);
+}

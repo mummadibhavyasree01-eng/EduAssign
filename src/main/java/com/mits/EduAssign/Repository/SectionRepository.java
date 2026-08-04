@@ -9,4 +9,6 @@ import com.mits.EduAssign.Entity.Section;
 public interface SectionRepository extends JpaRepository<Section, Long> {
     List<Section> findByDepartmentCodeAndYearNumber(String departmentCode, Integer yearNumber);
     Section findByDepartmentCodeAndYearNumberAndSectionName(String departmentCode, Integer yearNumber, String sectionName);
+    List<Section> findByDepartmentCodeAndYearNumberAndAcademicYear(String departmentCode, Integer yearNumber, String academicYear);
+    Section findByDepartmentCodeAndYearNumberAndSectionNameAndAcademicYear(String departmentCode, Integer yearNumber, String sectionName, String academicYear);
 }

@@ -130,19 +130,21 @@ public class SectionController {
     @PostMapping("/add")
     public ResponseEntity<?> addSection(@RequestBody Section section) {
         if (section.getDepartmentCode() == null || section.getYearNumber() == null || 
-            section.getSectionName() == null || section.getSectionName().trim().isEmpty()) {
-            return ResponseEntity.badRequest().body("Department, Year, and Section Name are all required");
+            section.getSectionName() == null || section.getSectionName().trim().isEmpty() ||
+            section.getAcademicYear() == null || section.getAcademicYear().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Department, Year, Section Name, and Academic Year are all required");
         }
         
-        // Check if section already exists for department + year + sectionName
-        Section existing = sectionRepository.findByDepartmentCodeAndYearNumberAndSectionName(
-                section.getDepartmentCode(), section.getYearNumber(), section.getSectionName().trim());
+        // Check if section already exists for department + year + sectionName + academicYear
+        Section existing = sectionRepository.findByDepartmentCodeAndYearNumberAndSectionNameAndAcademicYear(
+                section.getDepartmentCode(), section.getYearNumber(), section.getSectionName().trim(), section.getAcademicYear().trim());
         
         if (existing != null) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Section already exists");
         }
 
         section.setSectionName(section.getSectionName().trim());
+        section.setAcademicYear(section.getAcademicYear().trim());
         return ResponseEntity.ok(sectionRepository.save(section));
     }
 
@@ -163,12 +165,13 @@ public class SectionController {
         }
         
         if (updatedSection.getDepartmentCode() == null || updatedSection.getYearNumber() == null || 
-            updatedSection.getSectionName() == null || updatedSection.getSectionName().trim().isEmpty()) {
-            return ResponseEntity.badRequest().body("Department, Year, and Section Name are all required");
+            updatedSection.getSectionName() == null || updatedSection.getSectionName().trim().isEmpty() ||
+            updatedSection.getAcademicYear() == null || updatedSection.getAcademicYear().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Department, Year, Section Name, and Academic Year are all required");
         }
         
-        Section existing = sectionRepository.findByDepartmentCodeAndYearNumberAndSectionName(
-                updatedSection.getDepartmentCode(), updatedSection.getYearNumber(), updatedSection.getSectionName().trim());
+        Section existing = sectionRepository.findByDepartmentCodeAndYearNumberAndSectionNameAndAcademicYear(
+                updatedSection.getDepartmentCode(), updatedSection.getYearNumber(), updatedSection.getSectionName().trim(), updatedSection.getAcademicYear().trim());
         
         if (existing != null && !existing.getId().equals(id)) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Section combination already exists");
@@ -177,6 +180,7 @@ public class SectionController {
         section.setDepartmentCode(updatedSection.getDepartmentCode());
         section.setYearNumber(updatedSection.getYearNumber());
         section.setSectionName(updatedSection.getSectionName().trim());
+        section.setAcademicYear(updatedSection.getAcademicYear().trim());
         
         return ResponseEntity.ok(sectionRepository.save(section));
     }
@@ -185,5 +189,13 @@ public class SectionController {
     public ResponseEntity<List<Section>> getSectionsByDeptAndYear(
             @RequestParam String deptCode, @RequestParam Integer year) {
         return ResponseEntity.ok(sectionRepository.findByDepartmentCodeAndYearNumber(deptCode, year));
+    }
+
+    @GetMapping("/filter")
+    public ResponseEntity<List<Section>> getFilteredSections(
+            @RequestParam String deptCode, 
+            @RequestParam Integer year, 
+            @RequestParam String academicYear) {
+        return ResponseEntity.ok(sectionRepository.findByDepartmentCodeAndYearNumberAndAcademicYear(deptCode, year, academicYear.trim()));
     }
 }

@@ -177,6 +177,13 @@ if (updatedFaculty.getPassword() != null && !updatedFaculty.getPassword().trim()
     faculty.setPassword(updatedFaculty.getPassword().trim());
 }
 
+if (updatedFaculty.getProfileImage() != null) {
+    if (updatedFaculty.getProfileImage().trim().isEmpty()) {
+        faculty.setProfileImage(null);
+    } else {
+        faculty.setProfileImage(updatedFaculty.getProfileImage());
+    }
+}
 
 return adminRepository.save(faculty);
 }
@@ -198,6 +205,14 @@ admin.setEmail(updatedAdmin.getEmail());
 
 if (updatedAdmin.getPassword() != null && !updatedAdmin.getPassword().trim().isEmpty()) {
     admin.setPassword(updatedAdmin.getPassword().trim());
+}
+
+if (updatedAdmin.getProfileImage() != null) {
+    if (updatedAdmin.getProfileImage().trim().isEmpty()) {
+        admin.setProfileImage(null);
+    } else {
+        admin.setProfileImage(updatedAdmin.getProfileImage());
+    }
 }
 
 return adminRepository.save(admin);

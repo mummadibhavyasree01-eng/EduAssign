@@ -10,22 +10,49 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Render header nav user chip
   document.getElementById('nav-user-name').innerText = currentUser.name;
   document.getElementById('nav-user-role').innerText = isFaculty ? `Role: Faculty (${currentUser.id})` : `Role: Admin (Preview)`;
+  
+  // Render header avatar
+  updateHeaderAvatar(currentUser);
 
-  // Show "Back to Admin" button and top-left arrow if logged-in user is an Admin
-  const brandHeader = document.getElementById('navbar-brand-header');
-  const brandBackArrow = document.getElementById('brand-back-arrow');
-  const brandCapIcon = document.getElementById('brand-cap-icon');
-
-  if (!isFaculty) {
-    document.getElementById('back-to-admin').style.display = 'inline-flex';
-    if (brandBackArrow) brandBackArrow.style.display = 'inline-block';
-    if (brandCapIcon) brandCapIcon.style.display = 'none';
-    
-    if (brandHeader) {
-      brandHeader.addEventListener('click', () => {
-        window.location.href = 'admin.html';
+  // Sidebar tab switching logic
+  const navItems = document.querySelectorAll('.nav-item');
+  const sections = document.querySelectorAll('.tab-content');
+  
+  navItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = item.getAttribute('data-target');
+      
+      navItems.forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      
+      sections.forEach(s => {
+        if (s.id === target) {
+          s.style.display = 'block';
+        } else {
+          s.style.display = 'none';
+        }
       });
-    }
+    });
+  });
+
+  // Initialize default active tab on startup
+  const activeNavItem = document.querySelector('.nav-item.active');
+  if (activeNavItem) {
+    const defaultTarget = activeNavItem.getAttribute('data-target');
+    sections.forEach(s => {
+      if (s.id === defaultTarget) {
+        s.style.display = 'block';
+      } else {
+        s.style.display = 'none';
+      }
+    });
+  }
+
+  // Show "Back to Admin" button if logged-in user is an Admin visiting this page
+  if (!isFaculty) {
+    const backToAdminBtn = document.getElementById('back-to-admin');
+    if (backToAdminBtn) backToAdminBtn.style.display = 'inline-flex';
   }
 
   // Populate profile fields
@@ -33,8 +60,62 @@ document.addEventListener('DOMContentLoaded', async () => {
   const profileEmailInput = document.getElementById('profile-email');
   const profilePasswordInput = document.getElementById('profile-password');
 
-  profileNameInput.value = currentUser.name;
-  profileEmailInput.value = currentUser.email;
+  profileNameInput.value = currentUser.name || '';
+  profileEmailInput.value = currentUser.email || '';
+
+  // Profile Picture management
+  const profilePhotoInput = document.getElementById('profile-photo-input');
+  const profileAvatarPreview = document.getElementById('profile-avatar-preview');
+  const profileAvatarInitials = document.getElementById('profile-avatar-initials');
+  const profilePhotoRemoveBtn = document.getElementById('profile-photo-remove-btn');
+  let currentProfileImageBase64 = currentUser.profileImage || null;
+
+  function renderProfilePhotoPreview() {
+    if (currentProfileImageBase64) {
+      profileAvatarPreview.src = currentProfileImageBase64;
+      profileAvatarPreview.style.display = 'block';
+      profileAvatarInitials.style.display = 'none';
+      if (profilePhotoRemoveBtn) profilePhotoRemoveBtn.style.display = 'inline-flex';
+    } else {
+      profileAvatarPreview.style.display = 'none';
+      const nameParts = (currentUser.name || 'U').trim().split(/\s+/);
+      const nameInitials = nameParts.map(n => n[0]).join('').substring(0, 2).toUpperCase();
+      profileAvatarInitials.innerText = nameInitials || 'U';
+      profileAvatarInitials.style.display = 'flex';
+      if (profilePhotoRemoveBtn) profilePhotoRemoveBtn.style.display = 'none';
+    }
+    updateHeaderAvatar({ ...currentUser, profileImage: currentProfileImageBase64 });
+  }
+
+  // Load initial photo
+  renderProfilePhotoPreview();
+
+  // Handle file select
+  if (profilePhotoInput) {
+    profilePhotoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        if (file.size > 10 * 1024 * 1024) {
+          showToast('Image Too Large', 'Maximum image size allowed is 10MB', 'error');
+          profilePhotoInput.value = '';
+          return;
+        }
+        resizeAndCropImage(file, (base64) => {
+          currentProfileImageBase64 = base64;
+          renderProfilePhotoPreview();
+        });
+      }
+    });
+  }
+
+  // Handle photo remove
+  if (profilePhotoRemoveBtn) {
+    profilePhotoRemoveBtn.addEventListener('click', () => {
+      currentProfileImageBase64 = ''; // empty string means remove
+      if (profilePhotoInput) profilePhotoInput.value = '';
+      renderProfilePhotoPreview();
+    });
+  }
 
   // State caches
   let subjects = [];
@@ -55,38 +136,53 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('profile-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const updatedData = {
-      id: currentUser.id,
-      name: profileNameInput.value.trim(),
-      email: profileEmailInput.value.trim(),
-      password: profilePasswordInput.value
+    const newPassword = profilePasswordInput.value;
+    
+    const saveProfileDetails = async () => {
+      const updatedData = {
+        id: currentUser.id,
+        name: profileNameInput.value.trim(),
+        email: profileEmailInput.value.trim(),
+        password: newPassword,
+        profileImage: currentProfileImageBase64
+      };
+
+      try {
+        const response = await apiRequest('/faculty/update', {
+          method: 'PUT',
+          body: updatedData
+        });
+
+        showToast('Profile Saved', 'Profile details updated successfully', 'success');
+
+        if (isFaculty) {
+          // Update session storage details
+          const newSession = {
+            ...currentUser,
+            name: response.name,
+            email: response.email,
+            profileImage: response.profileImage
+          };
+          sessionStorage.setItem('currentUser', JSON.stringify(newSession));
+          
+          // Update header display
+          document.getElementById('nav-user-name').innerText = response.name;
+          updateHeaderAvatar(newSession);
+        }
+        
+        profilePasswordInput.value = '';
+
+      } catch (error) {
+        showToast('Save Failed', error.message || 'Could not update profile details', 'error');
+      }
     };
 
-    try {
-      const response = await apiRequest('/faculty/update', {
-        method: 'PUT',
-        body: updatedData
+    if (newPassword && newPassword.trim() !== '') {
+      showConfirm('Confirm Password Change', 'Are you sure you want to change your password?', () => {
+        saveProfileDetails();
       });
-
-      showToast('Profile Saved', 'Profile details updated successfully', 'success');
-
-      if (isFaculty) {
-        // Update session storage details
-        const newSession = {
-          ...currentUser,
-          name: response.name,
-          email: response.email
-        };
-        sessionStorage.setItem('currentUser', JSON.stringify(newSession));
-        
-        // Update header display
-        document.getElementById('nav-user-name').innerText = response.name;
-      }
-      
-      profilePasswordInput.value = '';
-
-    } catch (error) {
-      showToast('Save Failed', error.message || 'Could not update profile details', 'error');
+    } else {
+      saveProfileDetails();
     }
   });
 
@@ -98,11 +194,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function checkDeadlineStatus() {
     try {
-      const selectionWindow = await apiRequest('/adminfaculty/deadline');
+      const allWindows = await apiRequest('/adminfaculty/deadline');
       const badge = document.getElementById('selection-status-badge');
       const banner = document.getElementById('deadline-banner');
       
-      if (!selectionWindow || !selectionWindow.active) {
+      const activeWindows = Array.isArray(allWindows) ? allWindows.filter(w => w.active && new Date(w.deadline) > new Date()) : (allWindows && allWindows.active && new Date(allWindows.deadline) > new Date() ? [allWindows] : []);
+      
+      if (activeWindows.length === 0) {
         isSelectionPeriodActive = false;
         badge.className = 'status-badge closed';
         badge.innerText = 'Closed';
@@ -111,59 +209,56 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const deadlineTime = new Date(selectionWindow.deadline);
-      const now = new Date();
-      const diffMs = deadlineTime - now;
+      isSelectionPeriodActive = true;
+      badge.className = 'status-badge open';
+      badge.innerText = 'Open';
+      banner.style.display = 'flex';
+      
+      // We can use the message from the first active window
+      document.getElementById('deadline-banner-message').innerText = activeWindows[0].message || 'Preference selection window is active.';
 
-      if (diffMs <= 0) {
-        isSelectionPeriodActive = false;
-        badge.className = 'status-badge closed';
-        badge.innerText = 'Closed';
-        banner.style.display = 'none';
-        disableSelectionForm();
-      } else {
-        isSelectionPeriodActive = true;
-        badge.className = 'status-badge open';
-        badge.innerText = 'Open';
+      enableSelectionForm();
+
+      // Start countdown clock for all active windows
+      if (countdownInterval) clearInterval(countdownInterval);
+      
+      const updateAllCountdowns = () => {
+        const timer = document.getElementById('deadline-timer');
+        const now = new Date();
+        let countdownHTML = '<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">';
+        let anyActive = false;
         
-        // Setup Info Banner
-        banner.style.display = 'flex';
-        document.getElementById('deadline-banner-message').innerText = selectionWindow.message;
-
-        enableSelectionForm();
-
-        // Start countdown clock
-        if (countdownInterval) clearInterval(countdownInterval);
+        activeWindows.forEach(w => {
+          const diffMs = new Date(w.deadline) - now;
+          let timeText = '';
+          if (diffMs <= 0) {
+            timeText = 'Ended';
+          } else {
+            anyActive = true;
+            const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
+            timeText = `${days}d ${hours}h ${mins}m ${secs}s`;
+          }
+          countdownHTML += `<div style="font-size:0.9rem; font-weight:700; color:var(--secondary);"><i class="fas fa-clock"></i> Year ${w.year} (${w.department}): ${timeText}</div>`;
+        });
         
-        updateCountdown(deadlineTime);
-        countdownInterval = setInterval(() => {
-          updateCountdown(deadlineTime);
-        }, 1000); // Update every second
-      }
+        countdownHTML += '</div>';
+        timer.innerHTML = countdownHTML;
+        
+        if (!anyActive) {
+          clearInterval(countdownInterval);
+          checkDeadlineStatus();
+        }
+      };
+
+      updateAllCountdowns();
+      countdownInterval = setInterval(updateAllCountdowns, 1000);
 
     } catch (error) {
       console.error('Error checking deadline:', error);
     }
-  }
-
-  function updateCountdown(deadlineTime) {
-    const now = new Date();
-    const diffMs = deadlineTime - now;
-    const timer = document.getElementById('deadline-timer');
-
-    if (diffMs <= 0) {
-      timer.innerText = 'Remaining: Selection Period Ended';
-      clearInterval(countdownInterval);
-      checkDeadlineStatus(); // Reload status
-      return;
-    }
-
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
-
-    timer.innerHTML = `<i class="far fa-clock"></i> Remaining: ${days}d ${hours}h ${mins}m ${secs}s`;
   }
 
   function disableSelectionForm() {
@@ -234,11 +329,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       subjects = Array.isArray(allSubjects) ? allSubjects : [];
       facultyPreferences = Array.isArray(preferences) ? preferences : [];
 
+      const activeWindows = Array.isArray(res[2]) ? res[2].filter(w => w.active) : (res[2] && res[2].active ? [res[2]] : []);
+      selectionWindow = activeWindows[0] || null;
+
       let isAlreadyFullyAllocated = false;
       isRegularSelectionDisabled = false;
       isMockSelectionDisabled = false;
       allocatedSubjectIds.clear();
-      if (selectionWindow && selectionWindow.active && myAllocations) {
+      if (selectionWindow && myAllocations) {
         let subAllocList = [];
         if (Array.isArray(myAllocations)) {
           subAllocList = myAllocations;
@@ -246,12 +344,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           subAllocList = Array.isArray(myAllocations.subjectAllocations) ? myAllocations.subjectAllocations : [];
         }
 
-        const windowSubs = subjects.filter(s => 
-          (selectionWindow.academicYear == null || (s.academicYear && s.academicYear.toLowerCase() === selectionWindow.academicYear.toLowerCase())) &&
-          (selectionWindow.department == null || (s.dep && s.dep.toUpperCase() === selectionWindow.department.toUpperCase())) &&
-          (selectionWindow.year == null || (Number(s.year) === Number(selectionWindow.year))) &&
-          (selectionWindow.sem == null || (Number(s.sem) === Number(selectionWindow.sem)))
-        );
+        const windowSubs = subjects.filter(s => {
+          return activeWindows.some(win => 
+            (win.academicYear == null || (s.academicYear && s.academicYear.toLowerCase() === win.academicYear.toLowerCase())) &&
+            (win.department == null || (s.dep && s.dep.toUpperCase() === win.department.toUpperCase())) &&
+            (win.year == null || (Number(s.year) === Number(win.year))) &&
+            (win.sem == null || (Number(s.sem) === Number(win.sem)))
+          );
+        });
         const windowSubIds = new Set(windowSubs.map(s => s.id.toUpperCase()));
 
         const myWindowAllocs = subAllocList.filter(a => windowSubIds.has(a.subjectId.toUpperCase()));
@@ -289,19 +389,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
 
-      if (selectionWindow && selectionWindow.active) {
-        if (selectionWindow.year) {
-          subjects = subjects.filter(s => Number(s.year) === Number(selectionWindow.year));
-        }
-        if (selectionWindow.sem) {
-          subjects = subjects.filter(s => Number(s.sem) === Number(selectionWindow.sem));
-        }
-        if (selectionWindow.department) {
-          subjects = subjects.filter(s => s.dep && s.dep.toUpperCase() === selectionWindow.department.toUpperCase());
-        }
-        if (selectionWindow.academicYear) {
-          subjects = subjects.filter(s => s.academicYear && s.academicYear.toLowerCase() === selectionWindow.academicYear.toLowerCase());
-        }
+      if (activeWindows.length > 0) {
+        subjects = subjects.filter(s => {
+          return activeWindows.some(win => 
+            (win.academicYear == null || (s.academicYear && s.academicYear.toLowerCase() === win.academicYear.toLowerCase())) &&
+            (win.department == null || (s.dep && s.dep.toUpperCase() === win.department.toUpperCase())) &&
+            (win.year == null || (Number(s.year) === Number(win.year))) &&
+            (win.sem == null || (Number(s.sem) === Number(win.sem)))
+          );
+        });
+      } else {
+        subjects = [];
       }
 
       if (isAlreadyFullyAllocated) {
@@ -374,6 +472,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (searchBoxWrapper) searchBoxWrapper.style.display = 'block';
         renderSubjectPreferencesList(subjects);
       }
+      updateStepIndicators();
       
     } catch (error) {
       listContainer.innerHTML = '<div style="text-align: center; color: var(--error); padding: 20px;">Failed to load subjects directory</div>';
@@ -506,9 +605,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) {
             if (selectionWindow && selectionWindow.maxRegularPreferences) {
-              if (selectedOrder.length >= selectionWindow.maxRegularPreferences) {
+              const sameYearSelectedCount = selectedOrder.filter(id => {
+                const s = subjects.find(x => x.id === id);
+                return s && Number(s.year) === Number(sub.year);
+              }).length;
+              if (sameYearSelectedCount >= selectionWindow.maxRegularPreferences) {
                 checkbox.checked = false;
-                showToast('Limit Exceeded', `You can select a maximum of ${selectionWindow.maxRegularPreferences} regular preferences.`, 'warning');
+                showToast('Limit Exceeded', `You can select a maximum of ${selectionWindow.maxRegularPreferences} regular preferences for Year ${sub.year}.`, 'warning');
                 return;
               }
             }
@@ -585,9 +688,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       checkbox.addEventListener('change', () => {
         if (checkbox.checked) {
           if (selectionWindow && selectionWindow.maxMockPreferences) {
-            if (selectedMockOrder.length >= selectionWindow.maxMockPreferences) {
+            const sameYearMockSelectedCount = selectedMockOrder.filter(id => {
+              const s = subjects.find(x => x.id === id);
+              return s && Number(s.year) === Number(sub.year);
+            }).length;
+            if (sameYearMockSelectedCount >= selectionWindow.maxMockPreferences) {
               checkbox.checked = false;
-              showToast('Limit Exceeded', `You can select a maximum of ${selectionWindow.maxMockPreferences} mock preferences.`, 'warning');
+              showToast('Limit Exceeded', `You can select a maximum of ${selectionWindow.maxMockPreferences} mock preferences for Year ${sub.year}.`, 'warning');
               return;
             }
           }
@@ -670,9 +777,69 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Disable confirm submission button if there are no changes
+    checkConfirmButtonStatus();
+  }
+
+  function checkConfirmButtonStatus() {
     const confirmBtn = document.getElementById('preferences-confirm-btn');
-    if (confirmBtn) {
-      confirmBtn.disabled = !hasChanges();
+    if (!confirmBtn) return;
+    
+    if (!hasChanges()) {
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<i class="fas fa-check-circle"></i> Saved (No Changes)';
+      confirmBtn.style.opacity = '0.6';
+      confirmBtn.style.cursor = 'not-allowed';
+    } else {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = '<i class="fas fa-check-circle"></i> Confirm Submission';
+      confirmBtn.style.opacity = '1';
+      confirmBtn.style.cursor = 'pointer';
+    }
+  }
+
+  function updateStepIndicators() {
+    const ind1 = document.getElementById('step-ind-1');
+    const ind2 = document.getElementById('step-ind-2');
+    const ind3 = document.getElementById('step-ind-3');
+    const line1 = document.getElementById('step-line-1');
+    const line2 = document.getElementById('step-line-2');
+    if (!ind1 || !ind2 || !ind3 || !line1 || !line2) return;
+
+    const setInactive = (ind, num) => {
+      num.style.background = 'rgba(255,255,255,0.1)';
+      num.style.color = 'var(--text-muted)';
+      ind.style.color = 'var(--text-muted)';
+      ind.style.fontWeight = '500';
+    };
+    const setActive = (ind, num, colorClass) => {
+      num.style.background = `var(--${colorClass})`;
+      num.style.color = 'var(--bg-dark)';
+      ind.style.color = `var(--${colorClass})`;
+      ind.style.fontWeight = '600';
+    };
+
+    const num1 = ind1.querySelector('.step-num');
+    const num2 = ind2.querySelector('.step-num');
+    const num3 = ind3.querySelector('.step-num');
+
+    setInactive(ind1, num1);
+    setInactive(ind2, num2);
+    setInactive(ind3, num3);
+    line1.style.background = 'rgba(255,255,255,0.08)';
+    line2.style.background = 'rgba(255,255,255,0.08)';
+
+    if (currentStep === 1) {
+      setActive(ind1, num1, 'secondary');
+    } else if (currentStep === 2) {
+      setActive(ind1, num1, 'secondary');
+      setActive(ind2, num2, 'secondary');
+      line1.style.background = 'var(--secondary)';
+    } else if (currentStep === 3) {
+      setActive(ind1, num1, 'secondary');
+      setActive(ind2, num2, 'secondary');
+      setActive(ind3, num3, 'primary');
+      line1.style.background = 'var(--secondary)';
+      line2.style.background = 'var(--secondary)';
     }
   }
 
@@ -732,6 +899,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         renderMockSubjectList(subjects);
       }
+      updateStepIndicators();
     });
   }
 
@@ -743,6 +911,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       previewSection.style.display = 'none';
       document.getElementById('subject-search').value = '';
       renderSubjectPreferencesList(subjects);
+      updateStepIndicators();
     });
   }
 
@@ -759,29 +928,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       previewSection.style.display = 'block';
       if (searchBoxWrapper) searchBoxWrapper.style.display = 'none';
       renderPreviewTable();
+      updateStepIndicators();
     });
   }
 
   if (previewBackBtn) {
     previewBackBtn.addEventListener('click', () => {
-      const hasMockAvailable = subjects.some(s => s.mock === true);
-      if (facultyHasMockAllocation || !hasMockAvailable) {
-        currentStep = 1;
-        prefSelectionSection.style.display = 'block';
-        mockSection.style.display = 'none';
-        previewSection.style.display = 'none';
-        if (searchBoxWrapper) searchBoxWrapper.style.display = 'block';
-        document.getElementById('subject-search').value = '';
-        renderSubjectPreferencesList(subjects);
-      } else {
-        currentStep = 2;
-        prefSelectionSection.style.display = 'none';
-        mockSection.style.display = 'block';
-        previewSection.style.display = 'none';
-        if (searchBoxWrapper) searchBoxWrapper.style.display = 'block';
-        document.getElementById('subject-search').value = '';
-        renderMockSubjectList(subjects);
-      }
+      currentStep = 1;
+      prefSelectionSection.style.display = 'block';
+      mockSection.style.display = 'none';
+      previewSection.style.display = 'none';
+      if (searchBoxWrapper) searchBoxWrapper.style.display = 'block';
+      document.getElementById('subject-search').value = '';
+      renderSubjectPreferencesList(subjects);
+      updateStepIndicators();
     });
   }
 
@@ -843,8 +1003,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       showToast('Submission Failed', error.message || 'Error saving selections', 'error');
     } finally {
       if (confirmBtn) {
-        confirmBtn.disabled = false;
         confirmBtn.innerHTML = '<i class="fas fa-check-circle"></i> Confirm Submission';
+        checkConfirmButtonStatus();
       }
     }
   });

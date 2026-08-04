@@ -68,6 +68,13 @@ public class SuperAdminController {
         if (updatedAdmin.getPassword() != null && !updatedAdmin.getPassword().trim().isEmpty()) {
             admin.setPassword(updatedAdmin.getPassword().trim());
         }
+        if (updatedAdmin.getProfileImage() != null) {
+            if (updatedAdmin.getProfileImage().trim().isEmpty()) {
+                admin.setProfileImage(null);
+            } else {
+                admin.setProfileImage(updatedAdmin.getProfileImage());
+            }
+        }
         return ResponseEntity.ok(adminRepository.save(admin));
     }
 
@@ -181,9 +188,9 @@ public class SuperAdminController {
                 }
             }
 
-            // 2. Add active section allocations that match the requested academic year
+            // 2. Add active section allocations that match the requested academic year (only if finalized)
             for (SectionAllocation sa : activeSecAllocs) {
-                if (sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(f.getId())) {
+                if (sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(f.getId()) && sa.isFinalized()) {
                     Subject sub = sa.getSubjectId() != null ? subjectMap.get(sa.getSubjectId().toLowerCase()) : null;
                     if (sub != null && sub.getAcademicYear() != null && sub.getAcademicYear().equalsIgnoreCase(academicYear)) {
                         String key = sa.getSubjectId() + "_" + (sa.getSectionName() != null ? sa.getSectionName() : "N/A");
@@ -195,7 +202,7 @@ public class SuperAdminController {
                             alloc.put("department", sub.getDep());
                             alloc.put("semester", sub.getSem());
                             alloc.put("sectionName", sa.getSectionName() != null ? sa.getSectionName() : "N/A");
-                            alloc.put("status", sa.isFinalized() ? "Finalized" : "Draft");
+                            alloc.put("status", "Finalized");
                             alloc.put("year", sub.getYear());
                             
                             int prefNum = -1;
@@ -213,9 +220,9 @@ public class SuperAdminController {
                 }
             }
 
-            // 3. Add active subject allocations (with no section yet) matching requested academic year
+            // 3. Add active subject allocations (with no section yet) matching requested academic year (only if finalized)
             for (SubjectAllocation sa : activeSubAllocs) {
-                if (sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(f.getId())) {
+                if (sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(f.getId()) && sa.isFinalized()) {
                     Subject sub = sa.getSubjectId() != null ? subjectMap.get(sa.getSubjectId().toLowerCase()) : null;
                     if (sub != null && sub.getAcademicYear() != null && sub.getAcademicYear().equalsIgnoreCase(academicYear)) {
                         boolean alreadyHasSectionOrHistory = false;
@@ -234,7 +241,7 @@ public class SuperAdminController {
                             alloc.put("department", sub.getDep());
                             alloc.put("semester", sub.getSem());
                             alloc.put("sectionName", "N/A");
-                            alloc.put("status", sa.isFinalized() ? "Finalized" : "Draft");
+                            alloc.put("status", "Finalized");
                             alloc.put("year", sub.getYear());
                             
                             int prefNum = -1;

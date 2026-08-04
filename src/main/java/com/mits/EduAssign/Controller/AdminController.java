@@ -51,6 +51,7 @@ public class AdminController {
 	        response.put("name", user.getName());
 	        response.put("email", user.getEmail());
 	        response.put("role", user.getRole());
+	        response.put("profileImage", user.getProfileImage());
 
 	        if ("ADMIN".equalsIgnoreCase(user.getRole())) {
 	            response.put("adminDashboard", true);
@@ -159,21 +160,22 @@ public class AdminController {
 	            @RequestParam(required = false) Integer sem,
 	            @RequestParam String academicYear,
 	            @RequestParam String department,
-	            @RequestParam(required = false) Integer year,
+	            @RequestParam(value = "years", required = false) List<Integer> years,
 	            @RequestParam(required = false) Integer hoursPerWeek,
 	            @RequestParam(required = false) Integer maxSubjectsAllocated,
 	            @RequestParam(required = false) Integer subjectHoursPerWeek,
 	            @RequestParam(required = false) Integer maxRegularPreferences,
 	            @RequestParam(required = false) Integer maxMockPreferences) {
-	        return ResponseEntity.ok(subjectService.setDeadline(
+	        subjectService.setDeadline(
 	                message, days, sem, academicYear, department,
-	                year, hoursPerWeek, maxSubjectsAllocated,
-	                subjectHoursPerWeek, maxRegularPreferences, maxMockPreferences));
+	                years, hoursPerWeek, maxSubjectsAllocated,
+	                subjectHoursPerWeek, maxRegularPreferences, maxMockPreferences);
+	        return ResponseEntity.ok(Map.of("message", "Deadlines published successfully"));
 	    }
 
 	    @GetMapping("/deadline")
 	    public ResponseEntity<?> getDeadline() {
-	        return ResponseEntity.ok(subjectService.getActiveDeadline());
+	        return ResponseEntity.ok(subjectService.getAllDeadlines());
 	    }
 
 	    @PostMapping("/allocate")
@@ -206,7 +208,7 @@ public class AdminController {
 	        }
 	    }
 
-	    @DeleteMapping("/allocation/{id}")
+	    @DeleteMapping("/delete-allocation/{id}")
 	    public ResponseEntity<?> deleteAllocation(@PathVariable Long id) {
 	        boolean deleted = subjectService.deleteAllocation(id);
 	        if (!deleted) {
@@ -234,7 +236,7 @@ public class AdminController {
 	        return ResponseEntity.ok(subjectService.getAllSectionAllocations());
 	    }
 
-	    @DeleteMapping("/section-allocation/{id}")
+	    @DeleteMapping("/delete-section-allocation/{id}")
 	    public ResponseEntity<?> deleteSectionAllocation(@PathVariable Long id) {
 	        boolean deleted = subjectService.deleteSectionAllocation(id);
 	        if (!deleted) {
@@ -249,14 +251,30 @@ public class AdminController {
 	        return ResponseEntity.ok("Allocations finalized successfully");
 	    }
 
+	    @PostMapping("/clear-allocations")
+	    public ResponseEntity<?> clearAllocations(@RequestParam(required = false) java.util.List<Integer> years) {
+	        if (years == null || years.isEmpty()) {
+	            subjectService.clearAllAllocations();
+	            return ResponseEntity.ok(java.util.Map.of("message", "All allocation data cleared successfully"));
+	        } else {
+	            subjectService.clearAllocationsForYears(years);
+	            return ResponseEntity.ok(java.util.Map.of("message", "Allocation data for selected years cleared successfully"));
+	        }
+	    }
+
+	    @GetMapping("/allocated-years")
+	    public ResponseEntity<?> getAllocatedYears() {
+	        return ResponseEntity.ok(subjectService.getAllocatedYears());
+	    }
+
 	    @GetMapping("/is-finalized")
 	    public ResponseEntity<?> isAllocationsFinalized() {
 	        return ResponseEntity.ok(subjectService.isAllocationsFinalized());
 	    }
 
 	    @PostMapping("/stop-deadline")
-	    public ResponseEntity<?> stopDeadline() {
-	        subjectService.stopDeadline();
+	    public ResponseEntity<?> stopDeadline(@RequestParam(required = false) Integer year) {
+	        subjectService.stopDeadline(year);
 	        return ResponseEntity.ok("Deadline stopped successfully");
 	    }
 
@@ -282,9 +300,10 @@ public class AdminController {
 	            @RequestParam(required = false) Integer maxMock,
 	            @RequestParam(required = false) String academicYear,
 	            @RequestParam(required = false) String department,
-	            @RequestParam(required = false) Integer sem) {
+	            @RequestParam(required = false) Integer sem,
+	            @RequestParam(value = "years", required = false) List<Integer> years) {
 	        try {
-	            return ResponseEntity.ok(subjectService.autoAllocateSubjects(hoursLimit, subjectHours, maxSubjects, maxRegular, maxMock, academicYear, department, sem));
+	            return ResponseEntity.ok(subjectService.autoAllocateSubjects(hoursLimit, subjectHours, maxSubjects, maxRegular, maxMock, academicYear, department, sem, years));
 	        } catch (IllegalStateException e) {
 	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
 	        } catch (Exception e) {

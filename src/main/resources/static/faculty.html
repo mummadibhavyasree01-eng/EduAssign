@@ -8,38 +8,55 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Stylesheets -->
   <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/admin.css">
   <link rel="stylesheet" href="css/faculty.css">
 </head>
 <body>
-  <div class="faculty-layout">
-    <!-- Navbar Header -->
-    <header class="navbar glass-panel">
-      <div class="navbar-brand" id="navbar-brand-header" style="cursor: pointer;" title="EduAssign">
-        <i class="fas fa-arrow-left" id="brand-back-arrow" style="display: none; margin-right: 6px; color: var(--primary);"></i>
-        <i class="fas fa-graduation-cap" id="brand-cap-icon"></i>
+  <div class="dashboard-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar glass-panel">
+      <div class="sidebar-brand" id="navbar-brand-header" style="cursor: pointer;" title="EduAssign">
+        <i class="fas fa-graduation-cap"></i>
         <span>EduAssign Faculty</span>
       </div>
-      <div class="navbar-actions">
-        <div class="user-chip">
-          <div class="avatar-sm">F</div>
-          <div class="user-meta">
-            <span id="nav-user-name">Faculty Member</span>
-            <small id="nav-user-role">Role: Faculty</small>
-          </div>
-        </div>
-        <!-- Admin Back Link (visible only to admins visiting this page) -->
-        <a href="admin.html" id="back-to-admin" class="btn btn-ghost" style="display: none; border-color: rgba(99,102,241,0.4); color: var(--primary)">
-          <i class="fas fa-arrow-left"></i> Admin Panel
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-target="preference-tab">
+          <i class="fas fa-list-check"></i>
+          <span>Subject Preference</span>
         </a>
-        <button class="btn btn-ghost" onclick="logout()">
-          <i class="fas fa-sign-out-alt"></i> Logout
+        <a href="#" class="nav-item" data-target="allocation-tab">
+          <i class="fas fa-square-poll-horizontal"></i>
+          <span>Allocated Subjects</span>
+        </a>
+        <a href="#" class="nav-item" data-target="profile-tab">
+          <i class="fas fa-user-circle"></i>
+          <span>My Profile</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="admin.html" id="back-to-admin" class="btn btn-ghost btn-block" style="display: none; border-color: rgba(99,102,241,0.4); color: var(--primary); margin-bottom: 10px;">
+          <i class="fas fa-arrow-left"></i> <span>Admin Panel</span>
+        </a>
+        <button class="btn btn-ghost btn-block" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i>
+          <span>Logout</span>
         </button>
       </div>
-    </header>
+    </aside>
 
-    <!-- Main Container -->
-    <main class="main-container">
-      
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Main Header -->
+      <header class="main-header glass-panel" style="padding: 14px 24px;">
+        <div>
+          <h2 id="nav-user-name">Welcome, Faculty Member</h2>
+          <p id="nav-user-role" style="font-size: 0.82rem; color: var(--text-muted);">Role: Faculty</p>
+        </div>
+        <div class="user-avatar-wrapper" style="width: 48px; height: 48px; border: 2px solid var(--primary);">
+          <!-- Loaded dynamically -->
+        </div>
+      </header>
+
       <!-- Deadline notification banner -->
       <div class="glass-panel info-banner" id="deadline-banner" style="display: none;">
         <div class="banner-icon"><i class="fas fa-bullhorn animate-pulse"></i></div>
@@ -50,134 +67,168 @@
         </div>
       </div>
 
-      <div class="dashboard-grid">
-        
-        <!-- Left Side: Profile Card & Allocated Subjects -->
-        <div class="left-column">
-          <!-- Profile Card -->
-          <div class="glass-panel profile-card">
-            <h3>Update Profile</h3>
-            <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Manage your account details and password.</p>
-            <form id="profile-form">
-              <div class="input-wrapper">
-                <input type="text" id="profile-name" placeholder=" " required>
-                <label for="profile-name"><i class="fas fa-user"></i> Full Name</label>
-              </div>
-              <div class="input-wrapper">
-                <input type="email" id="profile-email" placeholder=" " required autocomplete="username">
-                <label for="profile-email"><i class="fas fa-envelope"></i> Email Address</label>
-              </div>
-              <div class="input-wrapper">
-                <input type="password" id="profile-password" placeholder=" " required autocomplete="new-password">
-                <label for="profile-password"><i class="fas fa-lock"></i> New Password</label>
-              </div>
-              <div style="display: flex; gap: 10px; margin-top: 15px;">
-                <button type="submit" class="btn btn-primary" style="flex: 1;">
-                  <i class="fas fa-save"></i> Save Profile
-                </button>
-                <button type="button" class="btn btn-ghost" onclick="logout()" style="flex: 1; border-color: rgba(239, 68, 68, 0.4); color: var(--error);">
-                  <i class="fas fa-sign-out-alt"></i> Logout
-                </button>
-              </div>
-            </form>
+      <!-- TABS -->
+      
+      <!-- Tab 1: Preferences selection box -->
+      <section id="preference-tab" class="tab-content">
+        <div class="glass-panel selection-card">
+          <div class="card-header">
+            <h3>Subject Preference Selection</h3>
+            <span class="status-badge" id="selection-status-badge">Checking...</span>
+          </div>
+          <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Click subjects to rank your preference order (1st choice, 2nd choice, 3rd choice, etc.). Selections are updated and saved in the exact sequence clicked.</p>
+
+          <!-- Wizard Steps Progress Bar -->
+          <div class="wizard-progress-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; background: rgba(255,255,255,0.02); padding: 12px 20px; border-radius: var(--border-radius-md); border: 1px solid var(--panel-border);">
+            <div class="step-indicator active" id="step-ind-1" style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--secondary); transition: all 0.3s;">
+              <span class="step-num" style="background: var(--secondary); color: var(--bg-dark); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; transition: all 0.3s;">1</span>
+              <span class="step-lbl" style="font-size: 0.85rem;">Regular Preferences</span>
+            </div>
+            <div style="flex: 1; height: 2px; background: rgba(255,255,255,0.08); margin: 0 16px; transition: all 0.3s;" id="step-line-1"></div>
+            <div class="step-indicator" id="step-ind-2" style="display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--text-muted); transition: all 0.3s;">
+              <span class="step-num" style="background: rgba(255,255,255,0.1); color: var(--text-muted); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; transition: all 0.3s;">2</span>
+              <span class="step-lbl" style="font-size: 0.85rem;">Mock Preference</span>
+            </div>
+            <div style="flex: 1; height: 2px; background: rgba(255,255,255,0.08); margin: 0 16px; transition: all 0.3s;" id="step-line-2"></div>
+            <div class="step-indicator" id="step-ind-3" style="display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--text-muted); transition: all 0.3s;">
+              <span class="step-num" style="background: rgba(255,255,255,0.1); color: var(--text-muted); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; transition: all 0.3s;">3</span>
+              <span class="step-lbl" style="font-size: 0.85rem;">Preview & Confirm</span>
+            </div>
+          </div>
+          
+          <div class="search-box-wrapper" style="margin-bottom: 16px;">
+            <i class="fas fa-search search-icon"></i>
+            <input type="text" id="subject-search" class="form-control" placeholder="Search subjects by name or code...">
           </div>
 
-          <!-- Allocated Subjects Card -->
-          <div class="glass-panel allocation-card" style="margin-top: 20px;">
-            <h3>Allocated Subjects</h3>
-            <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Final assigned classes allocated by the administrator.</p>
-            
-            <div id="allocation-list-container">
-              <div class="no-allocations">
-                <i class="fas fa-calendar-alt"></i>
-                <p>No subjects allocated yet. Subject allocations are performed after the selection window closes.</p>
+          <form id="preferences-form">
+            <!-- Step 1: Normal Preferences Selection -->
+            <div id="preferences-selection-section">
+              <div class="subject-selection-list" id="subject-checkboxes-container">
+                <div style="text-align: center; color: var(--text-muted); padding: 30px;">
+                  <i class="fas fa-circle-notch fa-spin"></i> Loading subjects...
+                </div>
               </div>
+              
+              <!-- Ranked preferences sub-list -->
+              <div id="ranked-preferences-list" style="margin-top: 20px; padding: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); display: none;">
+                <h4 style="margin-bottom: 10px; font-size: 0.9rem; color: var(--primary); font-weight: 600;">Selected Preferences (Ranked)</h4>
+                <div id="ranked-items-container" style="display: flex; flex-direction: column; gap: 6px;"></div>
+              </div>
+
+              <button type="button" class="btn btn-primary btn-block" id="preferences-next-btn" style="margin-top: 20px;" disabled>
+                Next <i class="fas fa-arrow-right" style="margin-left: 6px;"></i>
+              </button>
+            </div>
+
+            <!-- Step 2: Mock Selection -->
+            <div id="mock-section" style="display: none;">
+              <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Please select at least one subject for mock allocation below.</p>
+              <div class="subject-selection-list" id="mock-checkboxes-container"></div>
+              <div style="display: flex; gap: 12px; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" id="mock-back-btn" style="flex: 1;">
+                  <i class="fas fa-arrow-left" style="margin-right: 6px;"></i> Back
+                </button>
+                <button type="button" class="btn btn-primary" id="mock-submit-btn" style="flex: 2;">
+                  Submit Choices <i class="fas fa-arrow-right" style="margin-left: 6px;"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Step 3: Preview -->
+            <div id="preview-section" style="display: none;">
+              <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Please review all your preferences, including mock subjects, before confirming submission.</p>
+              <div class="table-responsive" style="margin-bottom: 20px; max-height: 350px; overflow-y: auto;">
+                <table class="table" style="width: 100%; border-collapse: collapse;">
+                  <thead>
+                    <tr>
+                      <th style="text-align: left; padding: 10px; border-bottom: 1px solid var(--panel-border); font-size: 0.85rem;">Order</th>
+                      <th style="text-align: left; padding: 10px; border-bottom: 1px solid var(--panel-border); font-size: 0.85rem;">Subject</th>
+                      <th style="text-align: left; padding: 10px; border-bottom: 1px solid var(--panel-border); font-size: 0.85rem;">Type</th>
+                    </tr>
+                  </thead>
+                  <tbody id="preview-table-body"></tbody>
+                </table>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" id="preview-back-btn" style="flex: 1;">
+                  <i class="fas fa-edit" style="margin-right: 6px;"></i> Edit
+                </button>
+                <button type="submit" class="btn btn-primary" id="preferences-confirm-btn" style="flex: 2;">
+                  <i class="fas fa-check-circle" style="margin-right: 6px;"></i> Confirm Submission
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Tab 2: Allocated Subjects -->
+      <section id="allocation-tab" class="tab-content" style="display: none;">
+        <div class="glass-panel allocation-card">
+          <h3>Allocated Subjects</h3>
+          <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Final assigned classes allocated by the administrator.</p>
+          
+          <div id="allocation-list-container">
+            <div class="no-allocations">
+              <i class="fas fa-calendar-alt"></i>
+              <p>No subjects allocated yet. Subject allocations are performed after the selection window closes.</p>
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- Right Side: Preferences selection box -->
-        <div class="right-column">
-          <div class="glass-panel selection-card">
-            <div class="card-header">
-              <h3>Subject Preference Selection</h3>
-              <span class="status-badge" id="selection-status-badge">Checking...</span>
+      <!-- Tab 3: Profile Updates -->
+      <section id="profile-tab" class="tab-content" style="display: none;">
+        <div class="glass-panel profile-card" style="max-width: 600px; margin: 0 auto;">
+          <h3>My Profile</h3>
+          <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Manage your account details and profile picture.</p>
+          
+          <form id="profile-form">
+            <!-- Profile Photo Upload -->
+            <div class="profile-photo-container">
+              <div class="profile-avatar-preview-wrapper" onclick="document.getElementById('profile-photo-input').click()" title="Click to upload profile photo">
+                <img id="profile-avatar-preview" class="profile-avatar-preview" src="" style="display:none;">
+                <div id="profile-avatar-initials" class="header-avatar-initials" style="display:flex;">U</div>
+                <div class="avatar-hover-overlay">
+                  <i class="fas fa-camera"></i>
+                  <span>Change<br>Photo</span>
+                </div>
+              </div>
+              <input type="file" id="profile-photo-input" accept="image/*" style="display:none;">
+              <button type="button" id="profile-photo-remove-btn" class="photo-remove-btn" style="display:none;">
+                <i class="fas fa-trash"></i> Remove Photo
+              </button>
             </div>
-            <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Click subjects to rank your preference order (1st choice, 2nd choice, 3rd choice, etc.). Selections are updated and saved in the exact sequence clicked.</p>
-            
-            <div class="search-box-wrapper" style="margin-bottom: 16px;">
-              <i class="fas fa-search search-icon"></i>
-              <input type="text" id="subject-search" class="form-control" placeholder="Search subjects by name or code...">
+
+            <div class="input-wrapper">
+              <input type="text" id="profile-name" placeholder=" " required>
+              <label for="profile-name"><i class="fas fa-user"></i> Full Name</label>
             </div>
-
-            <form id="preferences-form">
-              <!-- Step 1: Normal Preferences Selection -->
-              <div id="preferences-selection-section">
-                <div class="subject-selection-list" id="subject-checkboxes-container">
-                  <div style="text-align: center; color: var(--text-muted); padding: 30px;">
-                    <i class="fas fa-circle-notch fa-spin"></i> Loading subjects...
-                  </div>
-                </div>
-                
-                <!-- Ranked preferences sub-list -->
-                <div id="ranked-preferences-list" style="margin-top: 20px; padding: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); display: none;">
-                  <h4 style="margin-bottom: 10px; font-size: 0.9rem; color: var(--primary); font-weight: 600;">Selected Preferences (Ranked)</h4>
-                  <div id="ranked-items-container" style="display: flex; flex-direction: column; gap: 6px;"></div>
-                </div>
-
-                <button type="button" class="btn btn-primary btn-block" id="preferences-next-btn" style="margin-top: 20px;" disabled>
-                  Next <i class="fas fa-arrow-right" style="margin-left: 6px;"></i>
-                </button>
-              </div>
-
-              <!-- Step 2: Mock Selection -->
-              <div id="mock-section" style="display: none;">
-                <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Please select at least one subject for mock allocation below.</p>
-                <div class="subject-selection-list" id="mock-checkboxes-container"></div>
-                <div style="display: flex; gap: 12px; margin-top: 20px;">
-                  <button type="button" class="btn btn-secondary" id="mock-back-btn" style="flex: 1;">
-                    <i class="fas fa-arrow-left" style="margin-right: 6px;"></i> Back
-                  </button>
-                  <button type="button" class="btn btn-primary" id="mock-submit-btn" style="flex: 2;">
-                    Submit Choices <i class="fas fa-arrow-right" style="margin-left: 6px;"></i>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Step 3: Preview -->
-              <div id="preview-section" style="display: none;">
-                <p style="margin-bottom: 20px; font-size: 0.88rem; color: var(--text-muted);">Please review all your preferences, including mock subjects, before confirming submission.</p>
-                <div class="table-responsive" style="margin-bottom: 20px; max-height: 350px; overflow-y: auto;">
-                  <table class="table" style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                      <tr>
-                        <th style="text-align: left; padding: 10px; border-bottom: 1px solid var(--panel-border); font-size: 0.85rem;">Order</th>
-                        <th style="text-align: left; padding: 10px; border-bottom: 1px solid var(--panel-border); font-size: 0.85rem;">Subject</th>
-                        <th style="text-align: left; padding: 10px; border-bottom: 1px solid var(--panel-border); font-size: 0.85rem;">Type</th>
-                      </tr>
-                    </thead>
-                    <tbody id="preview-table-body"></tbody>
-                  </table>
-                </div>
-                <div style="display: flex; gap: 12px; margin-top: 20px;">
-                  <button type="button" class="btn btn-secondary" id="preview-back-btn" style="flex: 1;">
-                    <i class="fas fa-arrow-left" style="margin-right: 6px;"></i> Back
-                  </button>
-                  <button type="submit" class="btn btn-primary" id="preferences-confirm-btn" style="flex: 2;">
-                    <i class="fas fa-check-circle" style="margin-right: 6px;"></i> Confirm Submission
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
+            <div class="input-wrapper">
+              <input type="email" id="profile-email" placeholder=" " required autocomplete="username">
+              <label for="profile-email"><i class="fas fa-envelope"></i> Email Address</label>
+            </div>
+            <div class="input-wrapper password-toggle-wrapper">
+              <input type="password" id="profile-password" placeholder=" " autocomplete="new-password">
+              <label for="profile-password"><i class="fas fa-lock"></i> New Password (leave blank to keep current)</label>
+              <button type="button" class="password-toggle" style="top: 25px;">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+            <div style="margin-top: 24px;">
+              <button type="submit" class="btn btn-primary btn-block">
+                <i class="fas fa-save"></i> Save Changes
+              </button>
+            </div>
+          </form>
         </div>
-
-      </div>
-    </main>
+      </section>
+    </div>
   </div>
 
   <!-- Scripts -->
-  <script src="js/common.js?v=4"></script>
-  <script src="js/faculty.js?v=4"></script>
+  <script src="js/common.js?v=5"></script>
+  <script src="js/faculty.js?v=5"></script>
 </body>
 </html>

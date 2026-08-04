@@ -6,16 +6,71 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!currentUser) return;
 
   // Render header info
-  document.getElementById('header-user-name').innerText = currentUser.name;
-  document.getElementById('header-user-email').innerText = currentUser.email;
+  document.getElementById('header-user-name').innerText = currentUser.name || '';
+  document.getElementById('header-user-email').innerText = currentUser.email || '';
+  updateHeaderAvatar(currentUser);
 
   // Initialize Profile form values
   const profileNameInput = document.getElementById('profile-name');
   const profileEmailInput = document.getElementById('profile-email');
   const profilePasswordInput = document.getElementById('profile-password');
 
-  profileNameInput.value = currentUser.name;
-  profileEmailInput.value = currentUser.email;
+  profileNameInput.value = currentUser.name || '';
+  profileEmailInput.value = currentUser.email || '';
+
+  // Profile Picture management
+  const profilePhotoInput = document.getElementById('profile-photo-input');
+  const profileAvatarPreview = document.getElementById('profile-avatar-preview');
+  const profileAvatarInitials = document.getElementById('profile-avatar-initials');
+  const profilePhotoRemoveBtn = document.getElementById('profile-photo-remove-btn');
+  let currentProfileImageBase64 = currentUser.profileImage || null;
+
+  function renderProfilePhotoPreview() {
+    if (currentProfileImageBase64) {
+      profileAvatarPreview.src = currentProfileImageBase64;
+      profileAvatarPreview.style.display = 'block';
+      profileAvatarInitials.style.display = 'none';
+      if (profilePhotoRemoveBtn) profilePhotoRemoveBtn.style.display = 'inline-flex';
+    } else {
+      profileAvatarPreview.style.display = 'none';
+      const nameParts = (currentUser.name || 'A').trim().split(/\s+/);
+      const nameInitials = nameParts.map(n => n[0]).join('').substring(0, 2).toUpperCase();
+      profileAvatarInitials.innerText = nameInitials || 'A';
+      profileAvatarInitials.style.display = 'flex';
+      if (profilePhotoRemoveBtn) profilePhotoRemoveBtn.style.display = 'none';
+    }
+    updateHeaderAvatar({ ...currentUser, profileImage: currentProfileImageBase64 });
+  }
+
+  // Load initial photo
+  renderProfilePhotoPreview();
+
+  // Handle file select
+  if (profilePhotoInput) {
+    profilePhotoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        if (file.size > 10 * 1024 * 1024) {
+          showToast('Image Too Large', 'Maximum image size allowed is 10MB', 'error');
+          profilePhotoInput.value = '';
+          return;
+        }
+        resizeAndCropImage(file, (base64) => {
+          currentProfileImageBase64 = base64;
+          renderProfilePhotoPreview();
+        });
+      }
+    });
+  }
+
+  // Handle photo remove
+  if (profilePhotoRemoveBtn) {
+    profilePhotoRemoveBtn.addEventListener('click', () => {
+      currentProfileImageBase64 = ''; // empty string means remove
+      if (profilePhotoInput) profilePhotoInput.value = '';
+      renderProfilePhotoPreview();
+    });
+  }
 
   // State caches
   let currentSubjectViewType = 'regular';
@@ -896,7 +951,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sub-year-filter').addEventListener('change', handleSubjectFilterChange);
   document.getElementById('sub-sem-filter').addEventListener('change', handleSubjectFilterChange);
 
-  document.getElementById('section-dept-select').addEventListener('change', renderSectionTable);
+  // Removed change listener for section-dept-select to prevent loading table data when adding sections
 
   window.openSubjectModal = async function(subId = null) {
     const modal = document.getElementById('subject-modal');
@@ -1018,7 +1073,6 @@ document.addEventListener('DOMContentLoaded', () => {
     await loadConfigOptions();
     renderDeptTable();
     renderYearTable();
-    renderSectionTable();
 
     // Populate Section addition form selectors
     const deptSelect = document.getElementById('section-dept-select');
@@ -1026,6 +1080,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     populateSelect(deptSelect, departments.map(d => ({ value: d.code, text: `${d.code} - ${d.name}` })), 'Select Dept');
     populateSelect(yearSelect, academicYears.map(y => ({ value: y.yearNumber, text: y.name })), 'Select Year');
+
+    // Populate Section filter selectors
+    const filterDept = document.getElementById('section-filter-dept');
+    const filterYear = document.getElementById('section-filter-year');
+    if (filterDept) populateFilterSelect(filterDept, departments.map(d => ({ value: d.code, text: `${d.code} - ${d.name}` })), 'Select Dept');
+    if (filterYear) populateFilterSelect(filterYear, academicYears.map(y => ({ value: y.yearNumber, text: y.name })), 'Select Year');
+
+    renderSectionTable(true);
   }
 
   async function loadConfigOptions() {
@@ -1051,6 +1113,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (prevVal && items.some(item => String(item.value) === String(prevVal))) {
       selectEl.value = prevVal;
     }
+  }
+
+  function populateFilterSelect(selectEl, items, allText) {
+    const prevVal = selectEl.value;
+    selectEl.innerHTML = `<option value="">${allText}</option>`;
+    items.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.value;
+      opt.innerText = item.text;
+      selectEl.appendChild(opt);
+    });
+    selectEl.value = prevVal || "";
   }
 
   // Dept CRUD
@@ -1207,28 +1281,52 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // Section CRUD
-  function renderSectionTable() {
+  function renderSectionTable(initial = false) {
     const tbody = document.getElementById('section-table-body');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const deptSelect = document.getElementById('section-dept-select');
-    const deptVal = deptSelect ? deptSelect.value : '';
-
-    if (!deptVal) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 15px;">Please select a Department to view sections.</td></tr>`;
+    if (initial === true) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 15px;"><i class="fas fa-info-circle"></i> Select filter criteria above and click "View" to search sections.</td></tr>`;
       return;
     }
 
-    const filtered = sections.filter(s => s.departmentCode && s.departmentCode.toUpperCase() === deptVal.toUpperCase());
+    const filterDept = document.getElementById('section-filter-dept').value;
+    const filterYear = document.getElementById('section-filter-year').value;
+    const filterAcademicYear = document.getElementById('section-filter-academic-year').value.trim();
+
+    if (!filterDept || !filterYear || !filterAcademicYear) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 15px;"><i class="fas fa-info-circle"></i> Please select all filters (Department, Year, Academic Year) and click "View" to see section configurations.</td></tr>`;
+      return;
+    }
+
+    let filtered = sections;
+    if (filterDept) {
+      filtered = filtered.filter(s => s.departmentCode && s.departmentCode.toUpperCase() === filterDept.toUpperCase());
+    }
+    if (filterYear) {
+      filtered = filtered.filter(s => s.yearNumber === parseInt(filterYear));
+    }
+    if (filterAcademicYear) {
+      filtered = filtered.filter(s => s.academicYear && s.academicYear.toLowerCase().includes(filterAcademicYear.toLowerCase()));
+    }
 
     const sorted = [...filtered].sort((a,b) => {
-      if (a.yearNumber !== b.yearNumber) return a.yearNumber - b.yearNumber;
-      return a.sectionName.localeCompare(b.sectionName);
+      const aDept = a.departmentCode || '';
+      const bDept = b.departmentCode || '';
+      if (aDept !== bDept) return aDept.localeCompare(bDept);
+      
+      const aYear = a.yearNumber || 0;
+      const bYear = b.yearNumber || 0;
+      if (aYear !== bYear) return aYear - bYear;
+      
+      const aSec = a.sectionName || '';
+      const bSec = b.sectionName || '';
+      return aSec.localeCompare(bSec);
     });
 
     if (sorted.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 15px;">No sections configured for this department.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 15px;">No sections found matching the filters.</td></tr>`;
       return;
     }
 
@@ -1237,6 +1335,7 @@ document.addEventListener('DOMContentLoaded', () => {
       tr.innerHTML = `
         <td><strong>${s.departmentCode}</strong></td>
         <td>Year ${s.yearNumber}</td>
+        <td>${s.academicYear || 'N/A'}</td>
         <td>Section ${s.sectionName}</td>
         <td>
           <button type="button" class="action-btn action-btn-edit" onclick="editSection(${s.id})" title="Edit" style="background:transparent; border:none; color:var(--secondary); cursor:pointer; padding:6px 10px;"><i class="fas fa-edit"></i></button>
@@ -1247,19 +1346,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const sectionFilterBtn = document.getElementById('section-filter-btn');
+  if (sectionFilterBtn) {
+    sectionFilterBtn.addEventListener('click', () => renderSectionTable(false));
+  }
+
   document.getElementById('section-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const departmentCode = document.getElementById('section-dept-select').value;
     const yearNumber = parseInt(document.getElementById('section-year-select').value);
+    const academicYear = document.getElementById('section-academic-year').value.trim();
     const sectionName = document.getElementById('section-name').value.toUpperCase().trim();
 
     try {
       await apiRequest('/sections/add', {
         method: 'POST',
-        body: { departmentCode, yearNumber, sectionName }
+        body: { departmentCode, yearNumber, sectionName, academicYear }
       });
       showToast('Section Added', `Created section ${sectionName} for Year ${yearNumber} ${departmentCode}`, 'success');
       document.getElementById('section-name').value = '';
+      document.getElementById('section-academic-year').value = '';
       loadConfigData();
     } catch (error) {
       showToast('Error', error.message || 'Failed to add section', 'error');
@@ -1285,6 +1391,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('section-modal');
     const deptSelect = document.getElementById('edit-section-dept');
     const yearSelect = document.getElementById('edit-section-year');
+    const acadYearInput = document.getElementById('edit-section-academic-year');
     const nameInput = document.getElementById('edit-section-name');
     const idInput = document.getElementById('edit-section-id');
 
@@ -1296,6 +1403,7 @@ document.addEventListener('DOMContentLoaded', () => {
       idInput.value = sec.id;
       deptSelect.value = sec.departmentCode;
       yearSelect.value = sec.yearNumber;
+      acadYearInput.value = sec.academicYear || '';
       nameInput.value = sec.sectionName;
       modal.classList.add('active');
     }
@@ -1310,12 +1418,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const id = document.getElementById('edit-section-id').value;
     const departmentCode = document.getElementById('edit-section-dept').value;
     const yearNumber = parseInt(document.getElementById('edit-section-year').value);
+    const academicYear = document.getElementById('edit-section-academic-year').value.trim();
     const sectionName = document.getElementById('edit-section-name').value.toUpperCase().trim();
 
     try {
       await apiRequest(`/sections/update/${id}`, {
         method: 'PUT',
-        body: { departmentCode, yearNumber, sectionName }
+        body: { departmentCode, yearNumber, sectionName, academicYear }
       });
       showToast('Section Updated', `Updated section configuration`, 'success');
       closeSectionModal();
@@ -1364,13 +1473,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const sem = document.getElementById('deadline-sem').value;
     const yearVal = document.getElementById('deadline-year').value.trim();
     const dept = document.getElementById('deadline-dept').value;
-    const classYear = document.getElementById('deadline-class-year').value;
+    const checkedYearCbs = document.querySelectorAll('input[name="deadline-year-checkbox"]:checked');
+    const classYears = Array.from(checkedYearCbs).map(cb => parseInt(cb.value));
     const previewContainer = document.getElementById('deadline-subjects-preview');
 
     if (!previewContainer) return;
 
-    if (!sem || !yearVal || !dept || !classYear) {
-      previewContainer.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">Select Department, Active Semester, Active Year, and enter Academic Year above to preview subjects list.</p>';
+    if (!sem || !yearVal || !dept || classYears.length === 0) {
+      previewContainer.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">Select Department, Active Semester, check Active Year(s), and enter Academic Year above to preview subjects list.</p>';
       return;
     }
 
@@ -1382,7 +1492,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const filtered = subjectList.filter(s => 
         Number(s.sem) === Number(sem) &&
-        Number(s.year) === Number(classYear) &&
+        classYears.includes(Number(s.year)) &&
         s.academicYear && s.academicYear.toLowerCase() === yearVal.toLowerCase() &&
         getSubjectDeptCode(s) === dept.toUpperCase()
       );
@@ -1456,29 +1566,30 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Attach change listeners to preview inputs
-  document.getElementById('deadline-sem').addEventListener('change', updateSubjectsPreview);
+document.getElementById('deadline-sem').addEventListener('change', updateSubjectsPreview);
   document.getElementById('deadline-year').addEventListener('input', updateSubjectsPreview);
   document.getElementById('deadline-dept').addEventListener('change', updateSubjectsPreview);
-  document.getElementById('deadline-class-year').addEventListener('change', updateSubjectsPreview);
+  document.querySelectorAll('input[name="deadline-year-checkbox"]').forEach(cb => {
+    cb.addEventListener('change', updateSubjectsPreview);
+  });
 
   async function loadDeadlineStatus() {
     const statusContainer = document.getElementById('deadline-status-container');
     statusContainer.innerHTML = `<div style="color: var(--text-muted);"><i class="fas fa-circle-notch fa-spin"></i> Loading...</div>`;
 
     try {
-      selectionWindow = await apiRequest('/adminfaculty/deadline');
+      const allWindows = await apiRequest('/adminfaculty/deadline');
       await populateDeadlineDropdowns();
 
       // Disable/enable Publish button based on running status
       const submitBtn = document.querySelector('#deadline-form button[type="submit"]');
       let isRunning = false;
-      if (selectionWindow && selectionWindow.active) {
-        const deadlineTime = new Date(selectionWindow.deadline);
-        const now = new Date();
-        if (now < deadlineTime) {
-          isRunning = true;
-        }
+      
+      const activeWindows = Array.isArray(allWindows) ? allWindows.filter(w => w.active && new Date(w.deadline) > new Date()) : (allWindows && allWindows.active && new Date(allWindows.deadline) > new Date() ? [allWindows] : []);
+      if (activeWindows.length > 0) {
+        isRunning = true;
       }
+      
       if (submitBtn) {
         if (isRunning) {
           submitBtn.disabled = true;
@@ -1488,6 +1599,16 @@ document.addEventListener('DOMContentLoaded', () => {
           submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Publish Selection Window';
         }
       }
+
+      // Check/uncheck Active Year checkboxes based on activeWindows
+      const yearCheckboxes = document.querySelectorAll('input[name="deadline-year-checkbox"]');
+      yearCheckboxes.forEach(cb => {
+        const val = parseInt(cb.value);
+        const hasWin = activeWindows.some(w => w.year === val);
+        cb.checked = hasWin;
+      });
+
+      selectionWindow = activeWindows[0] || (Array.isArray(allWindows) ? allWindows[0] : allWindows) || null;
 
       if (selectionWindow) {
         document.getElementById('deadline-message').value = selectionWindow.message || '';
@@ -1500,9 +1621,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectionWindow.department) {
           document.getElementById('deadline-dept').value = selectionWindow.department;
         }
-        if (selectionWindow.year) {
-          document.getElementById('deadline-class-year').value = selectionWindow.year;
-        }
         if (selectionWindow.maxRegularPreferences) {
           document.getElementById('deadline-max-regular-pref').value = selectionWindow.maxRegularPreferences;
         }
@@ -1512,7 +1630,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSubjectsPreview();
       }
       
-      if (!selectionWindow || !selectionWindow.active) {
+      if (!allWindows || (Array.isArray(allWindows) && allWindows.length === 0)) {
         statusContainer.innerHTML = `
           <div class="status-badge expired"><i class="fas fa-times-circle"></i> INACTIVE</div>
           <p style="margin-top: 10px; font-size: 0.9rem; color: var(--text-muted);">No subject selection window has been published yet. Faculty cannot submit preferences.</p>
@@ -1520,93 +1638,63 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const deadlineTime = new Date(selectionWindow.deadline);
-      const now = new Date();
-      const diffMs = deadlineTime - now;
-
-      if (diffMs <= 0) {
-        statusContainer.innerHTML = `
-          <div class="status-badge expired"><i class="fas fa-history"></i> EXPIRED</div>
+      let statusHTML = '<div style="display: flex; flex-direction: column; gap: 16px;">';
+      
+      for (let y = 1; y <= 4; y++) {
+        const win = Array.isArray(allWindows) ? allWindows.find(w => w.year === y) : (allWindows && allWindows.year === y ? allWindows : null);
+        statusHTML += `<div class="glass-panel" style="padding: 16px; border: 1px solid var(--panel-border); background: rgba(255,255,255,0.01);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h4 style="color: var(--primary); font-weight: 700; font-size: 0.95rem;">Year ${y} Selection Window</h4>`;
+        
+        if (win && win.active) {
+          const deadlineTime = new Date(win.deadline);
+          const now = new Date();
+          const diffMs = deadlineTime - now;
           
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 12px; font-size: 0.88rem; border-bottom: 1px solid var(--panel-border); padding-bottom: 12px;">
-            <div>
-              <span style="color: var(--text-muted);">Active Year:</span>
-              <strong style="color: var(--text-muted); margin-left: 4px;">Year ${selectionWindow.year || 'N/A'}</strong>
+          if (diffMs <= 0) {
+            statusHTML += `
+              <span class="status-badge expired" style="font-size:0.7rem; padding: 2px 8px; border-radius: 12px; background: rgba(244,63,94,0.1); color: var(--error); border: 1px solid rgba(244,63,94,0.2);"><i class="fas fa-history"></i> EXPIRED</span>
             </div>
-            <div>
-              <span style="color: var(--text-muted);">Semester:</span>
-              <strong style="color: var(--text-muted); margin-left: 4px;">Sem ${selectionWindow.sem || 'N/A'}</strong>
+            <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+              <div>Semester: <strong>Sem ${win.sem}</strong></div>
+              <div>Dept: <strong>${win.department}</strong></div>
+              <div class="col-span-2" style="margin-top: 4px;">Expired On: <strong>${deadlineTime.toLocaleString()}</strong></div>
+              <div class="col-span-2" style="margin-top: 4px; font-style: italic;">"${win.message}"</div>
+            </div>`;
+          } else {
+            const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            statusHTML += `
+              <span class="status-badge active" style="font-size:0.7rem; padding: 2px 8px; border-radius: 12px; background: rgba(20,184,166,0.1); color: var(--secondary); border: 1px solid rgba(20,184,166,0.2);"><i class="fas fa-hourglass-half animate-pulse"></i> RUNNING</span>
             </div>
-            <div>
-              <span style="color: var(--text-muted);">Max Regular:</span>
-              <strong style="color: var(--text-muted); margin-left: 4px;">${selectionWindow.maxRegularPreferences || 'N/A'}</strong>
-            </div>
-            <div>
-              <span style="color: var(--text-muted);">Max Mock:</span>
-              <strong style="color: var(--text-muted); margin-left: 4px;">${selectionWindow.maxMockPreferences || 'N/A'}</strong>
-            </div>
+            <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">
+              <div style="color: var(--secondary); font-size: 1.1rem; font-weight: 700; margin-bottom: 4px;">Remaining: ${days}d ${hours}h ${mins}m</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                <div>Semester: <strong>Sem ${win.sem}</strong></div>
+                <div>Dept: <strong>${win.department}</strong></div>
+                <div class="col-span-2">Deadline: <strong>${deadlineTime.toLocaleString()}</strong></div>
+              </div>
+              <div style="margin-top: 4px; font-style: italic;">"${win.message}"</div>
+              <button type="button" class="btn btn-ghost btn-block" style="margin-top: 8px; padding: 4px 10px; font-size: 0.78rem; border-color: rgba(244,63,94,0.4); color: var(--error);" onclick="stopDeadlineWindow(${y})">
+                <i class="fas fa-stop-circle"></i> Stop Year ${y} Selection
+              </button>
+            </div>`;
+          }
+        } else {
+          statusHTML += `
+            <span class="status-badge inactive" style="font-size:0.7rem; padding: 2px 8px; border-radius: 12px; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--panel-border);"><i class="fas fa-times-circle"></i> INACTIVE</span>
           </div>
-
-          <p style="font-size: 0.95rem; font-weight: 500; margin-top: 12px;">Deadline Passed on:</p>
-          <p style="font-size: 0.85rem; color: var(--text-muted);">${deadlineTime.toLocaleString()}</p>
-          <p style="margin-top: 10px; font-size: 0.88rem; font-style: italic; color: var(--secondary); border-top: 1px solid var(--panel-border); padding-top: 10px;">"${selectionWindow.message}"</p>
-        `;
-      } else {
-        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-        statusContainer.innerHTML = `
-          <div class="status-badge active"><i class="fas fa-hourglass-half"></i> RUNNING</div>
-          
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 12px; font-size: 0.88rem; border-bottom: 1px solid var(--panel-border); padding-bottom: 12px;">
-            <div>
-              <span style="color: var(--text-muted);">Active Year:</span>
-              <strong style="color: var(--secondary); margin-left: 4px;">Year ${selectionWindow.year}</strong>
-            </div>
-            <div>
-              <span style="color: var(--text-muted);">Semester:</span>
-              <strong style="color: var(--secondary); margin-left: 4px;">Sem ${selectionWindow.sem}</strong>
-            </div>
-            <div>
-              <span style="color: var(--text-muted);">Max Regular:</span>
-              <strong style="color: var(--secondary); margin-left: 4px;">${selectionWindow.maxRegularPreferences || 'N/A'}</strong>
-            </div>
-            <div>
-              <span style="color: var(--text-muted);">Max Mock:</span>
-              <strong style="color: var(--secondary); margin-left: 4px;">${selectionWindow.maxMockPreferences || 'N/A'}</strong>
-            </div>
-          </div>
-
-          <p style="font-size: 0.95rem; font-weight: 600; margin-top: 12px;">Time Remaining:</p>
-          <h4 style="color: var(--secondary); font-size: 1.5rem; margin-top: 4px; font-weight: 700;">
-            ${days}d ${hours}h ${mins}m
-          </h4>
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Deadline: ${deadlineTime.toLocaleString()}</p>
-          <p style="margin-top: 12px; font-size: 0.88rem; font-style: italic; color: var(--text-muted); border-top: 1px solid var(--panel-border); padding-top: 10px;">"${selectionWindow.message}"</p>
-          <button class="btn btn-danger btn-block" style="margin-top: 15px;" onclick="stopDeadlineWindow()"><i class="fas fa-stop-circle"></i> Stop Selection Window</button>
-        `;
+          <div style="font-size: 0.82rem; color: var(--text-disabled); font-style: italic;">
+            No selection window currently active.
+          </div>`;
+        }
+        
+        statusHTML += `</div>`;
       }
       
-      document.getElementById('deadline-message').value = selectionWindow.message;
-      if (selectionWindow.sem) {
-        document.getElementById('deadline-sem').value = selectionWindow.sem;
-      }
-      if (selectionWindow.academicYear) {
-        document.getElementById('deadline-year').value = selectionWindow.academicYear;
-      }
-      if (selectionWindow.department) {
-        document.getElementById('deadline-dept').value = selectionWindow.department;
-      }
-      if (selectionWindow.year) {
-        document.getElementById('deadline-class-year').value = selectionWindow.year;
-      }
-      if (selectionWindow.maxRegularPreferences) {
-        document.getElementById('deadline-max-regular-pref').value = selectionWindow.maxRegularPreferences;
-      }
-      if (selectionWindow.maxMockPreferences) {
-        document.getElementById('deadline-max-mock-pref').value = selectionWindow.maxMockPreferences;
-      }
+      statusHTML += '</div>';
+      statusContainer.innerHTML = statusHTML;
 
       updateSubjectsPreview();
 
@@ -1622,9 +1710,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const sem = parseInt(document.getElementById('deadline-sem').value);
     const academicYear = document.getElementById('deadline-year').value.trim();
     const department = document.getElementById('deadline-dept').value;
-    const year = parseInt(document.getElementById('deadline-class-year').value);
     const maxRegularPreferences = parseInt(document.getElementById('deadline-max-regular-pref').value);
     const maxMockPreferences = parseInt(document.getElementById('deadline-max-mock-pref').value);
+
+    const checkedYearCbs = document.querySelectorAll('input[name="deadline-year-checkbox"]:checked');
+    if (checkedYearCbs.length === 0) {
+      showToast('Error', 'Please select at least one Active Year checkbox.', 'warning');
+      return;
+    }
+    const years = Array.from(checkedYearCbs).map(cb => parseInt(cb.value));
 
     try {
       const params = new URLSearchParams();
@@ -1633,7 +1727,7 @@ document.addEventListener('DOMContentLoaded', () => {
       params.append('sem', sem);
       params.append('academicYear', academicYear);
       params.append('department', department);
-      params.append('year', year);
+      years.forEach(y => params.append('years', y));
       params.append('hoursPerWeek', 14);
       params.append('maxSubjectsAllocated', 3);
       params.append('subjectHoursPerWeek', 4);
@@ -1661,29 +1755,36 @@ document.addEventListener('DOMContentLoaded', () => {
       const prefYearFilter = document.getElementById('pref-year-filter');
       const prefSemSelect = document.getElementById('pref-sem-filter');
       if (prefDeptSelect) prefDeptSelect.value = department;
-      if (prefYearFilter) prefYearFilter.value = year;
+      if (prefYearFilter) prefYearFilter.value = years[0];
       if (prefSemSelect) prefSemSelect.value = sem;
       
       const prefTriggerLabel = document.getElementById('custom-pref-trigger-label');
       if (prefTriggerLabel) {
-        prefTriggerLabel.innerText = `Year ${year} - Sem ${sem}`;
+        prefTriggerLabel.innerText = `Year ${years.join(', ')} - Sem ${sem}`;
         prefTriggerLabel.style.color = 'var(--text-main)';
       }
       
-      // Reload Faculty Selections table (which will now be empty as preferences are wiped)
+      // Reload Faculty Selections table
       loadFacultySelections();
     } catch (error) {
       showToast('Error', error.message || 'Failed to publish deadline', 'error');
     }
   });
 
-  window.stopDeadlineWindow = function() {
-    showConfirm('Stop Window', 'Are you sure you want to stop the subject selection window immediately? Faculty will no longer be able to select subjects.', async () => {
+  window.stopDeadlineWindow = function(year) {
+    let yearText = year ? `for Year ${year} ` : '';
+    showConfirm('Stop Window', `Are you sure you want to stop the subject selection window ${yearText}immediately? Faculty will no longer be able to select subjects for it.`, async () => {
       try {
+        const params = new URLSearchParams();
+        if (year) params.append('year', year);
         await apiRequest('/adminfaculty/stop-deadline', {
-          method: 'POST'
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: params
         });
-        showToast('Deadline Stopped', 'The selection window has been closed immediately.', 'success');
+        showToast('Deadline Stopped', 'The selection window has been closed.', 'success');
         loadDeadlineStatus();
       } catch (error) {
         showToast('Error', error.message || 'Could not close selection window', 'error');
@@ -1702,7 +1803,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const finalizeBtn = document.getElementById('finalize-allocations-btn');
     
     try {
-      selectionWindow = await apiRequest('/adminfaculty/deadline');
+      const allWindows = await apiRequest('/adminfaculty/deadline');
+      selectionWindow = Array.isArray(allWindows) ? (allWindows.find(w => w.active) || allWindows.find(w => w.academicYear && w.department) || allWindows[0]) : allWindows;
       
       let isBefore = false;
       if (selectionWindow && selectionWindow.active) {
@@ -1746,22 +1848,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function calculateAllocationStats() {
     try {
-      const [subjects, allocations, sectionAllocs, selectionWindow] = await Promise.all([
+      const [subjects, allocations, sectionAllocs, allWindows] = await Promise.all([
         apiRequest('/subject/viewAll'),
         apiRequest('/adminfaculty/allocations'),
         apiRequest('/adminfaculty/section-allocations'),
         apiRequest('/adminfaculty/deadline')
       ]);
+      const selectionWindow = Array.isArray(allWindows) ? (allWindows.find(w => w.active) || allWindows.find(w => w.academicYear && w.department) || allWindows[0]) : allWindows;
 
       const subList = Array.isArray(subjects) ? subjects : [];
       const allocList = Array.isArray(allocations) ? allocations : [];
       const secList = Array.isArray(sectionAllocs) ? sectionAllocs : [];
 
+      const selectedYearCbs = document.querySelectorAll('.allocate-year-checkbox:checked');
+      const selectedYears = Array.from(selectedYearCbs).map(cb => Number(cb.value));
+
       let subjectsInWindow = subList;
       if (selectionWindow) {
         subjectsInWindow = subList.filter(s => 
           (selectionWindow.sem == null || Number(s.sem) === Number(selectionWindow.sem)) &&
-          (selectionWindow.year == null || Number(s.year) === Number(selectionWindow.year)) &&
+          (selectedYears.length > 0 ? selectedYears.includes(Number(s.year)) : (selectionWindow.year == null || Number(s.year) === Number(selectionWindow.year))) &&
           (selectionWindow.department == null || (s.dep && s.dep.toUpperCase() === selectionWindow.department.toUpperCase())) &&
           (selectionWindow.academicYear == null || (s.academicYear && s.academicYear.toLowerCase() === selectionWindow.academicYear.toLowerCase()))
         );
@@ -1805,9 +1911,9 @@ document.addEventListener('DOMContentLoaded', () => {
         secAllocMap[sa.subjectId.toUpperCase() + "_" + sa.sectionName.toUpperCase()] = sa;
       });
 
-      if (selectionWindow && selectionWindow.year && selectionWindow.department) {
+      if (selectionWindow && selectionWindow.department) {
         const activeSections = sections.filter(sec => 
-          Number(sec.yearNumber) === Number(selectionWindow.year) &&
+          (selectedYears.length > 0 ? selectedYears.includes(Number(sec.yearNumber)) : (selectionWindow.year == null || Number(sec.yearNumber) === Number(selectionWindow.year))) &&
           sec.departmentCode && sec.departmentCode.toUpperCase() === selectionWindow.department.toUpperCase()
         );
         
@@ -1867,13 +1973,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!loadDetailsDiv) return;
 
     try {
-      const [allocations, sectionAllocs, selectionWindow, subjects, hasPastMock] = await Promise.all([
+      const [allocations, sectionAllocs, allWindows, subjects, hasPastMock] = await Promise.all([
         apiRequest('/adminfaculty/allocations'),
         apiRequest('/adminfaculty/section-allocations'),
         apiRequest('/adminfaculty/deadline'),
         apiRequest('/subject/viewAll'),
         apiRequest(`/faculty/has-mock-allocation/${facId}`).catch(() => false)
       ]);
+      const selectionWindow = Array.isArray(allWindows) ? (allWindows.find(w => w.active) || allWindows.find(w => w.academicYear && w.department) || allWindows[0]) : allWindows;
 
       const subList = Array.isArray(subjects) ? subjects : [];
       const allocList = Array.isArray(allocations) ? allocations : [];
@@ -2090,7 +2197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = `<tr><td colspan="2" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>`;
 
     try {
-      const [allocations, sectionAllocs, faculty, subjects, selectionWindow, preferences] = await Promise.all([
+      const [allocations, sectionAllocs, faculty, subjects, allWindows, preferences] = await Promise.all([
         apiRequest('/adminfaculty/allocations'),
         apiRequest('/adminfaculty/section-allocations'),
         apiRequest('/adminfaculty/viewfaculty'),
@@ -2098,14 +2205,18 @@ document.addEventListener('DOMContentLoaded', () => {
         apiRequest('/adminfaculty/deadline'),
         apiRequest('/faculty/preferences/all')
       ]);
+      const selectionWindow = Array.isArray(allWindows) ? (allWindows.find(w => w.active) || allWindows.find(w => w.academicYear && w.department) || allWindows[0]) : allWindows;
 
       const subList = Array.isArray(subjects) ? subjects : [];
       
+      const selectedYearCbs = document.querySelectorAll('.allocate-year-checkbox:checked');
+      const selectedYears = Array.from(selectedYearCbs).map(cb => Number(cb.value));
+
       let filteredSubList = subList;
       if (selectionWindow) {
         filteredSubList = subList.filter(s => 
           (selectionWindow.sem == null || Number(s.sem) === Number(selectionWindow.sem)) &&
-          (selectionWindow.year == null || Number(s.year) === Number(selectionWindow.year)) &&
+          (selectedYears.length > 0 ? selectedYears.includes(Number(s.year)) : (selectionWindow.year == null || Number(s.year) === Number(selectionWindow.year))) &&
           (selectionWindow.department == null || (s.dep && s.dep.toUpperCase() === selectionWindow.department.toUpperCase())) &&
           (selectionWindow.academicYear == null || (s.academicYear && s.academicYear.toLowerCase() === selectionWindow.academicYear.toLowerCase()))
         );
@@ -2354,9 +2465,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxRegularVal = document.getElementById('page-max-regular') ? document.getElementById('page-max-regular').value : '';
     const maxMockVal = document.getElementById('page-max-mock') ? document.getElementById('page-max-mock').value : '';
 
+    const yearCbs = document.querySelectorAll('.allocate-year-checkbox:checked');
     const btn = document.getElementById('auto-allocate-btn');
     if (btn) {
-      if (hoursLimitVal && subjectHoursVal && maxSubjectsVal && maxRegularVal && maxMockVal) {
+      if (hoursLimitVal && subjectHoursVal && maxSubjectsVal && maxRegularVal && maxMockVal && yearCbs.length > 0) {
         btn.disabled = false;
       } else {
         btn.disabled = true;
@@ -2391,7 +2503,24 @@ document.addEventListener('DOMContentLoaded', () => {
         el.addEventListener('change', handleInputChange);
       }
     });
+
+    const yearCbs = document.querySelectorAll('.allocate-year-checkbox');
+    yearCbs.forEach(cb => {
+      cb.removeEventListener('change', handleYearCheckboxChange);
+      cb.addEventListener('change', handleYearCheckboxChange);
+    });
+
     checkAutoAllocateEnable();
+  }
+
+  function handleYearCheckboxChange() {
+    calculateAllocationStats();
+    loadSubjectAllocations();
+    checkAutoAllocateEnable();
+    const currentFacId = document.getElementById('alloc-faculty-select').value;
+    if (currentFacId) {
+      loadFacultyLoadDetails(currentFacId);
+    }
   }
 
   async function runAutoAllocationFromPage() {
@@ -2490,6 +2619,10 @@ document.addEventListener('DOMContentLoaded', () => {
       params.append('maxSubjects', maxSubjects);
       params.append('maxRegular', maxRegular);
       params.append('maxMock', maxMock);
+      
+      const selectedYearCbs = document.querySelectorAll('.allocate-year-checkbox:checked');
+      const selectedYears = Array.from(selectedYearCbs).map(cb => Number(cb.value));
+      selectedYears.forEach(y => params.append('years', y));
 
       await apiRequest(`/adminfaculty/auto-allocate?${params.toString()}`, { method: 'POST' });
       showToast('Auto-Allocation Complete', 'Draft subject allocations generated based on preferences.', 'success');
@@ -3611,6 +3744,96 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.finalizeAllAllocations = finalizeAllAllocations;
 
+  window.clearAllAllocationsWorkspace = async function() {
+    try {
+      const allocatedYears = await apiRequest('/adminfaculty/allocated-years');
+      if (!allocatedYears || allocatedYears.length === 0) {
+        showToast('No Data', 'No active allocation data found to clear.', 'info');
+        return;
+      }
+      
+      let modalOverlay = document.getElementById('clear-allocations-modal-overlay');
+      if (modalOverlay) {
+        modalOverlay.remove();
+      }
+      
+      modalOverlay = document.createElement('div');
+      modalOverlay.id = 'clear-allocations-modal-overlay';
+      modalOverlay.className = 'modal-overlay';
+      modalOverlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1100; backdrop-filter: blur(4px);";
+      
+      let checkboxesHtml = '';
+      allocatedYears.forEach(year => {
+        checkboxesHtml += `
+          <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-weight: 500; color: #fff; cursor: pointer;">
+            <input type="checkbox" class="clear-year-checkbox" value="${year}" checked style="width: 18px; height: 18px; accent-color: var(--secondary);">
+            Year ${year} Allocation Data
+          </label>
+        `;
+      });
+      
+      modalOverlay.innerHTML = `
+        <div class="modal-container glass-panel" style="background: rgba(15, 23, 42, 0.95); border: 1px solid var(--panel-border); border-radius: var(--border-radius-lg); padding: 24px; max-width: 420px; width: 90%; box-shadow: var(--glow-shadow);">
+          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--panel-border); padding-bottom: 12px;">
+            <h3 class="modal-title" style="margin: 0; font-size: 1.2rem; font-weight: 600; color: var(--secondary);"><i class="fas fa-trash-alt"></i> Clear Allocation Data</h3>
+            <button class="modal-close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem;" onclick="document.getElementById('clear-allocations-modal-overlay').remove()"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="modal-body" style="margin-bottom: 20px;">
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px; line-height: 1.4;">
+              Select the study years to clear subject and section allocations for. Preferences will not be deleted.
+            </p>
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--panel-border); padding: 16px; border-radius: var(--border-radius-md);">
+              ${checkboxesHtml}
+            </div>
+          </div>
+          <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
+            <button class="btn btn-ghost" style="padding: 8px 16px; font-size: 0.88rem;" onclick="document.getElementById('clear-allocations-modal-overlay').remove()">Cancel</button>
+            <button class="btn btn-danger" id="clear-allocations-confirm-btn" style="padding: 8px 20px; font-size: 0.88rem; background: var(--error); color: white; border: none; border-radius: var(--border-radius-sm); cursor: pointer;">Clear Selected Data</button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modalOverlay);
+      
+      document.getElementById('clear-allocations-confirm-btn').addEventListener('click', async () => {
+        const checkedBoxes = modalOverlay.querySelectorAll('.clear-year-checkbox:checked');
+        if (checkedBoxes.length === 0) {
+          showToast('Selection Empty', 'Please select at least one year to clear.', 'warning');
+          return;
+        }
+        
+        const selectedYears = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+        
+        try {
+          const params = new URLSearchParams();
+          selectedYears.forEach(y => params.append('years', y));
+          
+          await apiRequest(`/adminfaculty/clear-allocations?${params.toString()}`, {
+            method: 'POST'
+          });
+          
+          showToast('Allocations Cleared', `Successfully cleared allocation data for Year(s): ${selectedYears.join(', ')}.`, 'success');
+          modalOverlay.remove();
+          
+          await loadAllocationsWorkspaceData();
+          await calculateAllocationStats();
+          
+          const facSelect = document.getElementById('alloc-faculty-select');
+          if (facSelect) {
+            facSelect.value = '';
+            const loadDetails = document.getElementById('faculty-load-details');
+            if (loadDetails) loadDetails.innerHTML = '';
+          }
+        } catch (err) {
+          showToast('Error', err.message || 'Could not clear allocations', 'error');
+        }
+      });
+      
+    } catch (error) {
+      showToast('Error', error.message || 'Failed to check allocated years', 'error');
+    }
+  };
+
   // ----------------------------------------------------
   // PROFILE UPDATE
   // ----------------------------------------------------
@@ -3619,35 +3842,50 @@ document.addEventListener('DOMContentLoaded', () => {
   profileForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const updatedData = {
-      id: currentUser.id,
-      name: profileNameInput.value.trim(),
-      email: profileEmailInput.value.trim(),
-      password: profilePasswordInput.value
+    const newPassword = profilePasswordInput.value;
+
+    const saveAdminProfile = async () => {
+      const updatedData = {
+        id: currentUser.id,
+        name: profileNameInput.value.trim(),
+        email: profileEmailInput.value.trim(),
+        password: newPassword,
+        profileImage: currentProfileImageBase64
+      };
+
+      try {
+        const response = await apiRequest('/adminfaculty/update', {
+          method: 'PUT',
+          body: updatedData
+        });
+
+        showToast('Profile Updated', 'Administrator profile details saved', 'success');
+
+        const newSession = {
+          ...currentUser,
+          name: response.name,
+          email: response.email,
+          profileImage: response.profileImage
+        };
+        sessionStorage.setItem('currentUser', JSON.stringify(newSession));
+        
+        document.getElementById('header-user-name').innerText = response.name;
+        document.getElementById('header-user-email').innerText = response.email;
+        updateHeaderAvatar(newSession);
+        
+        profilePasswordInput.value = '';
+
+      } catch (error) {
+        showToast('Update Failed', error.message || 'Failed to update profile details', 'error');
+      }
     };
 
-    try {
-      const response = await apiRequest('/adminfaculty/update', {
-        method: 'PUT',
-        body: updatedData
+    if (newPassword && newPassword.trim() !== '') {
+      showConfirm('Confirm Password Change', 'Are you sure you want to change your password?', () => {
+        saveAdminProfile();
       });
-
-      showToast('Profile Updated', 'Administrator profile details saved', 'success');
-
-      const newSession = {
-        ...currentUser,
-        name: response.name,
-        email: response.email
-      };
-      sessionStorage.setItem('currentUser', JSON.stringify(newSession));
-      
-      document.getElementById('header-user-name').innerText = response.name;
-      document.getElementById('header-user-email').innerText = response.email;
-      
-      profilePasswordInput.value = '';
-
-    } catch (error) {
-      showToast('Update Failed', error.message || 'Failed to update profile details', 'error');
+    } else {
+      saveAdminProfile();
     }
   });
 

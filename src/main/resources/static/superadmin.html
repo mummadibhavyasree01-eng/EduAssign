@@ -52,8 +52,8 @@
           <h2>Super Admin Portal</h2>
           <p id="header-subtitle">System-wide role permissions management</p>
         </div>
-        <div class="header-profile">
-          <div class="avatar-icon">SA</div>
+        <div class="header-profile" style="display: flex; align-items: center;">
+          <div class="user-avatar-wrapper" style="width: 40px; height: 40px; border: 2px solid var(--primary); margin-right: 12px;"></div>
           <div class="profile-info">
             <h4 id="header-user-name">Super Admin</h4>
             <span id="header-user-email">superadmin@gmail.com</span>
@@ -215,6 +215,22 @@
             <p>Modify your administrative account details</p>
           </div>
           <form id="profile-form">
+            <!-- Profile Photo Upload -->
+            <div class="profile-photo-container">
+              <div class="profile-avatar-preview-wrapper" onclick="document.getElementById('profile-photo-input').click()" title="Click to upload profile photo">
+                <img id="profile-avatar-preview" class="profile-avatar-preview" src="" style="display:none;">
+                <div id="profile-avatar-initials" class="header-avatar-initials" style="display:flex;">S</div>
+                <div class="avatar-hover-overlay">
+                  <i class="fas fa-camera"></i>
+                  <span>Change<br>Photo</span>
+                </div>
+              </div>
+              <input type="file" id="profile-photo-input" accept="image/*" style="display:none;">
+              <button type="button" id="profile-photo-remove-btn" class="photo-remove-btn" style="display:none;">
+                <i class="fas fa-trash"></i> Remove Photo
+              </button>
+            </div>
+
             <div class="input-wrapper">
               <input type="text" id="profile-name" placeholder=" " required>
               <label for="profile-name"><i class="fas fa-user"></i> Full Name</label>
@@ -223,9 +239,12 @@
               <input type="email" id="profile-email" placeholder=" " required autocomplete="username">
               <label for="profile-email"><i class="fas fa-envelope"></i> Email Address</label>
             </div>
-            <div class="input-wrapper">
-              <input type="password" id="profile-password" placeholder=" " required autocomplete="new-password">
+            <div class="input-wrapper password-toggle-wrapper">
+              <input type="password" id="profile-password" placeholder=" " autocomplete="new-password">
               <label for="profile-password"><i class="fas fa-lock"></i> New Password</label>
+              <button type="button" class="password-toggle" style="top: 25px;">
+                <i class="fas fa-eye"></i>
+              </button>
             </div>
             <button type="submit" class="btn btn-primary">
               <i class="fas fa-save"></i>
@@ -259,9 +278,12 @@
             <input type="email" id="fac-email" placeholder=" " required autocomplete="email">
             <label for="fac-email">Email Address</label>
           </div>
-          <div class="input-wrapper">
+          <div class="input-wrapper password-toggle-wrapper">
             <input type="password" id="fac-password" placeholder=" " autocomplete="new-password">
             <label for="fac-password">Password</label>
+            <button type="button" class="password-toggle" style="top: 25px;">
+              <i class="fas fa-eye"></i>
+            </button>
           </div>
         </div>
         <div class="modal-footer">

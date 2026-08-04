@@ -67,8 +67,8 @@
           <h2 id="welcome-message">Admin Console</h2>
           <p id="header-subtitle">Manage curriculum directories, selection timelines, and class allocations</p>
         </div>
-        <div class="header-profile">
-          <div class="avatar-icon">A</div>
+        <div class="header-profile" style="display: flex; align-items: center;">
+          <div class="user-avatar-wrapper" style="width: 40px; height: 40px; border: 2px solid var(--primary); margin-right: 12px;"></div>
           <div class="profile-info">
             <h4 id="header-user-name">Admin User</h4>
             <span id="header-user-email">admin@gmail.com</span>
@@ -324,7 +324,7 @@
                 <p>Configure sections for each year and department</p>
               </div>
             </div>
-            <form id="section-form" style="margin-bottom: 20px; display: grid; grid-template-columns: 2fr 2fr 1.5fr 1fr; gap: 10px;">
+            <form id="section-form" style="margin-bottom: 20px; display: grid; grid-template-columns: 2fr 2fr 2fr 1.5fr 1fr; gap: 10px; align-items: center;">
               <div>
                 <select id="section-dept-select" class="form-control" required>
                   <option value="" disabled selected>Select Dept</option>
@@ -336,16 +336,39 @@
                 </select>
               </div>
               <div>
+                <input type="text" id="section-academic-year" class="form-control" placeholder="Academic Year (e.g. 2026-27)" required>
+              </div>
+              <div>
                 <input type="text" id="section-name" class="form-control" placeholder="Sec Name (e.g. A)" required>
               </div>
               <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add</button>
             </form>
+            
+            <div class="filter-row" style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center; background: rgba(255,255,255,0.02); padding: 12px; border-radius: var(--border-radius-md); border: 1px solid var(--panel-border);">
+              <span style="font-size: 0.88rem; color: var(--text-muted); font-weight: 500;"><i class="fas fa-filter"></i> Filter View:</span>
+              <div style="width: 150px;">
+                <select id="section-filter-dept" class="form-control" style="height: 38px; padding: 6px 12px; font-size: 0.85rem;">
+                  <option value="" disabled selected>Select Dept</option>
+                </select>
+              </div>
+              <div style="width: 150px;">
+                <select id="section-filter-year" class="form-control" style="height: 38px; padding: 6px 12px; font-size: 0.85rem;">
+                  <option value="" disabled selected>Select Year</option>
+                </select>
+              </div>
+              <div style="width: 180px;">
+                <input type="text" id="section-filter-academic-year" class="form-control" placeholder="Academic Year (e.g. 2026-27)" style="height: 38px; padding: 6px 12px; font-size: 0.85rem;">
+              </div>
+              <button type="button" class="btn btn-secondary" id="section-filter-btn" style="height: 38px; padding: 6px 12px; font-size: 0.85rem;"><i class="fas fa-search"></i> View</button>
+            </div>
+
             <div class="table-responsive">
               <table class="table">
                 <thead>
                   <tr>
                     <th>Department</th>
                     <th>Year</th>
+                    <th>Academic Year</th>
                     <th>Section</th>
                     <th>Action</th>
                   </tr>
@@ -384,15 +407,22 @@
                   </select>
                 </div>
                 <div class="form-group">
-                  <label for="deadline-class-year">Active Year</label>
-                  <select id="deadline-class-year" class="form-control" required>
-                    <option value="" disabled selected>Select Year</option>
-                    <option value="1">Year 1</option>
-                    <option value="2">Year 2</option>
-                    <option value="3">Year 3</option>
-                    <option value="4">Year 4</option>
-                  </select>
-                </div>
+                   <label>Active Year(s)</label>
+                   <div style="display: flex; gap: 12px; align-items: center; margin-top: 10px; flex-wrap: wrap;">
+                     <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                       <input type="checkbox" name="deadline-year-checkbox" value="1" style="width:16px; height:16px; accent-color:var(--primary);"> <span>Year 1</span>
+                     </label>
+                     <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                       <input type="checkbox" name="deadline-year-checkbox" value="2" style="width:16px; height:16px; accent-color:var(--primary);"> <span>Year 2</span>
+                     </label>
+                     <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                       <input type="checkbox" name="deadline-year-checkbox" value="3" style="width:16px; height:16px; accent-color:var(--primary);"> <span>Year 3</span>
+                     </label>
+                     <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                       <input type="checkbox" name="deadline-year-checkbox" value="4" style="width:16px; height:16px; accent-color:var(--primary);"> <span>Year 4</span>
+                     </label>
+                   </div>
+                 </div>
                 <div class="form-group">
                   <label for="deadline-year">Academic Year</label>
                   <input type="text" id="deadline-year" class="form-control" placeholder="e.g. 2026-27" required>
@@ -458,6 +488,9 @@
           </div>
           <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
             <span class="status-badge" id="finalize-status-badge" style="padding: 8px 16px; font-size: 0.85rem;">Draft Mode</span>
+            <button class="btn btn-danger" id="clear-allocations-btn" onclick="clearAllAllocationsWorkspace()" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: var(--error);">
+              <i class="fas fa-trash-alt"></i> Clear Allocations
+            </button>
             <button class="btn btn-secondary" id="finalize-allocations-btn" onclick="finalizeAllAllocations()">
               <i class="fas fa-check-double"></i> Finalize Allocations
             </button>
@@ -487,6 +520,23 @@
             <div class="form-group" style="margin-bottom: 0;">
               <label for="page-max-mock" style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Max Mock Subjects / Faculty</label>
               <input type="number" id="page-max-mock" class="form-control" min="0" max="10" placeholder="e.g. 1" style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); color: var(--text-main); height: 38px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Active Year(s) to Allocate</label>
+              <div style="display: flex; gap: 10px; align-items: center; height: 38px; flex-wrap: wrap;">
+                <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 0.85rem; color: var(--text-main);">
+                  <input type="checkbox" class="allocate-year-checkbox" value="1" checked style="width:15px; height:15px; accent-color: var(--secondary);"> Y1
+                </label>
+                <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 0.85rem; color: var(--text-main);">
+                  <input type="checkbox" class="allocate-year-checkbox" value="2" checked style="width:15px; height:15px; accent-color: var(--secondary);"> Y2
+                </label>
+                <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 0.85rem; color: var(--text-main);">
+                  <input type="checkbox" class="allocate-year-checkbox" value="3" checked style="width:15px; height:15px; accent-color: var(--secondary);"> Y3
+                </label>
+                <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 0.85rem; color: var(--text-main);">
+                  <input type="checkbox" class="allocate-year-checkbox" value="4" checked style="width:15px; height:15px; accent-color: var(--secondary);"> Y4
+                </label>
+              </div>
             </div>
             <div>
               <button class="btn btn-primary btn-block" id="auto-allocate-btn" onclick="runAutoAllocationFromPage()" disabled style="height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
@@ -725,6 +775,22 @@
             <p>Modify your administrator credentials</p>
           </div>
           <form id="profile-form">
+            <!-- Profile Photo Upload -->
+            <div class="profile-photo-container">
+              <div class="profile-avatar-preview-wrapper" onclick="document.getElementById('profile-photo-input').click()" title="Click to upload profile photo">
+                <img id="profile-avatar-preview" class="profile-avatar-preview" src="" style="display:none;">
+                <div id="profile-avatar-initials" class="header-avatar-initials" style="display:flex;">A</div>
+                <div class="avatar-hover-overlay">
+                  <i class="fas fa-camera"></i>
+                  <span>Change<br>Photo</span>
+                </div>
+              </div>
+              <input type="file" id="profile-photo-input" accept="image/*" style="display:none;">
+              <button type="button" id="profile-photo-remove-btn" class="photo-remove-btn" style="display:none;">
+                <i class="fas fa-trash"></i> Remove Photo
+              </button>
+            </div>
+
             <div class="input-wrapper">
               <input type="text" id="profile-name" placeholder=" " required>
               <label for="profile-name"><i class="fas fa-user"></i> Full Name</label>
@@ -733,9 +799,12 @@
               <input type="email" id="profile-email" placeholder=" " required autocomplete="username">
               <label for="profile-email"><i class="fas fa-envelope"></i> Email Address</label>
             </div>
-            <div class="input-wrapper">
-              <input type="password" id="profile-password" placeholder=" " required autocomplete="new-password">
+            <div class="input-wrapper password-toggle-wrapper">
+              <input type="password" id="profile-password" placeholder=" " autocomplete="new-password">
               <label for="profile-password"><i class="fas fa-lock"></i> New Password</label>
+              <button type="button" class="password-toggle" style="top: 25px;">
+                <i class="fas fa-eye"></i>
+              </button>
             </div>
             <button type="submit" class="btn btn-primary">
               <i class="fas fa-save"></i>
@@ -768,6 +837,9 @@
             <select id="edit-section-year" class="form-control" required style="padding-top: 14px;">
               <option value="" disabled selected>Select Year</option>
             </select>
+          </div>
+          <div class="input-wrapper">
+            <input type="text" id="edit-section-academic-year" class="form-control" placeholder="Academic Year (e.g. 2026-27)" required>
           </div>
           <div class="input-wrapper">
             <input type="text" id="edit-section-name" class="form-control" placeholder="Sec Name (e.g. A)" required>

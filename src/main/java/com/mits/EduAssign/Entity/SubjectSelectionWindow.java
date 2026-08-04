@@ -8,7 +8,7 @@ import jakarta.persistence.Id;
 @Entity
 public class SubjectSelectionWindow {
     @Id
-    private Integer id = 1;
+    private Integer id;
 
     @Column(name="Message", nullable=false)
     private String message;

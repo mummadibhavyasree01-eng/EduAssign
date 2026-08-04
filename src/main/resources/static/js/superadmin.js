@@ -6,16 +6,71 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!currentUser) return;
 
   // Render header info
-  document.getElementById('header-user-name').innerText = currentUser.name;
-  document.getElementById('header-user-email').innerText = currentUser.email;
+  document.getElementById('header-user-name').innerText = currentUser.name || '';
+  document.getElementById('header-user-email').innerText = currentUser.email || '';
+  updateHeaderAvatar(currentUser);
 
   // Initialize Profile form values
   const profileNameInput = document.getElementById('profile-name');
   const profileEmailInput = document.getElementById('profile-email');
   const profilePasswordInput = document.getElementById('profile-password');
 
-  profileNameInput.value = currentUser.name;
-  profileEmailInput.value = currentUser.email;
+  profileNameInput.value = currentUser.name || '';
+  profileEmailInput.value = currentUser.email || '';
+
+  // Profile Picture management
+  const profilePhotoInput = document.getElementById('profile-photo-input');
+  const profileAvatarPreview = document.getElementById('profile-avatar-preview');
+  const profileAvatarInitials = document.getElementById('profile-avatar-initials');
+  const profilePhotoRemoveBtn = document.getElementById('profile-photo-remove-btn');
+  let currentProfileImageBase64 = currentUser.profileImage || null;
+
+  function renderProfilePhotoPreview() {
+    if (currentProfileImageBase64) {
+      profileAvatarPreview.src = currentProfileImageBase64;
+      profileAvatarPreview.style.display = 'block';
+      profileAvatarInitials.style.display = 'none';
+      if (profilePhotoRemoveBtn) profilePhotoRemoveBtn.style.display = 'inline-flex';
+    } else {
+      profileAvatarPreview.style.display = 'none';
+      const nameParts = (currentUser.name || 'S').trim().split(/\s+/);
+      const nameInitials = nameParts.map(n => n[0]).join('').substring(0, 2).toUpperCase();
+      profileAvatarInitials.innerText = nameInitials || 'S';
+      profileAvatarInitials.style.display = 'flex';
+      if (profilePhotoRemoveBtn) profilePhotoRemoveBtn.style.display = 'none';
+    }
+    updateHeaderAvatar({ ...currentUser, profileImage: currentProfileImageBase64 });
+  }
+
+  // Load initial photo
+  renderProfilePhotoPreview();
+
+  // Handle file select
+  if (profilePhotoInput) {
+    profilePhotoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        if (file.size > 10 * 1024 * 1024) {
+          showToast('Image Too Large', 'Maximum image size allowed is 10MB', 'error');
+          profilePhotoInput.value = '';
+          return;
+        }
+        resizeAndCropImage(file, (base64) => {
+          currentProfileImageBase64 = base64;
+          renderProfilePhotoPreview();
+        });
+      }
+    });
+  }
+
+  // Handle photo remove
+  if (profilePhotoRemoveBtn) {
+    profilePhotoRemoveBtn.addEventListener('click', () => {
+      currentProfileImageBase64 = ''; // empty string means remove
+      if (profilePhotoInput) profilePhotoInput.value = '';
+      renderProfilePhotoPreview();
+    });
+  }
 
   // State cache for Faculty & Reports
   let facultyList = [];
@@ -357,38 +412,53 @@ document.addEventListener('DOMContentLoaded', () => {
   profileForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const updatedData = {
-      id: currentUser.id,
-      name: profileNameInput.value.trim(),
-      email: profileEmailInput.value.trim(),
-      password: profilePasswordInput.value.trim()
+    const newPassword = profilePasswordInput.value.trim();
+
+    const saveSuperadminProfile = async () => {
+      const updatedData = {
+        id: currentUser.id,
+        name: profileNameInput.value.trim(),
+        email: profileEmailInput.value.trim(),
+        password: newPassword,
+        profileImage: currentProfileImageBase64
+      };
+
+      try {
+        const response = await apiRequest('/superadmin/update', {
+          method: 'PUT',
+          body: updatedData
+        });
+
+        showToast('Profile Updated', 'Super Admin profile details saved', 'success');
+
+        // Update Session Storage
+        const newSession = {
+          ...currentUser,
+          name: response.name,
+          email: response.email,
+          profileImage: response.profileImage
+        };
+        sessionStorage.setItem('currentUser', JSON.stringify(newSession));
+        
+        // Update header
+        document.getElementById('header-user-name').innerText = response.name;
+        document.getElementById('header-user-email').innerText = response.email;
+        updateHeaderAvatar(newSession);
+        
+        // Clear password field
+        profilePasswordInput.value = '';
+
+      } catch (error) {
+        showToast('Update Failed', error.message || 'Failed to update profile details', 'error');
+      }
     };
 
-    try {
-      const response = await apiRequest('/superadmin/update', {
-        method: 'PUT',
-        body: updatedData
+    if (newPassword && newPassword.trim() !== '') {
+      showConfirm('Confirm Password Change', 'Are you sure you want to change your password?', () => {
+        saveSuperadminProfile();
       });
-
-      showToast('Profile Updated', 'Super Admin profile details saved', 'success');
-
-      // Update Session Storage
-      const newSession = {
-        ...currentUser,
-        name: response.name,
-        email: response.email
-      };
-      sessionStorage.setItem('currentUser', JSON.stringify(newSession));
-      
-      // Update header
-      document.getElementById('header-user-name').innerText = response.name;
-      document.getElementById('header-user-email').innerText = response.email;
-      
-      // Clear password field
-      profilePasswordInput.value = '';
-
-    } catch (error) {
-      showToast('Update Failed', error.message || 'Failed to update profile details', 'error');
+    } else {
+      saveSuperadminProfile();
     }
   });
 

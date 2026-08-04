@@ -10,18 +10,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const togglePassword = document.getElementById('toggle-password');
 
   // Toggle Password Visibility
-  togglePassword.addEventListener('click', () => {
-    const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-    passwordInput.setAttribute('type', type);
-    
-    // Toggle eye icon
-    const icon = togglePassword.querySelector('i');
-    if (type === 'password') {
-      icon.className = 'fas fa-eye';
-    } else {
-      icon.className = 'fas fa-eye-slash';
-    }
-  });
+  if (togglePassword && passwordInput) {
+    togglePassword.addEventListener('click', function() {
+      const type = passwordInput.type === 'password' ? 'text' : 'password';
+      passwordInput.type = type;
+      
+      // Toggle eye icon
+      const icon = this.querySelector('i');
+      if (icon) {
+        if (type === 'password') {
+          icon.className = 'fas fa-eye';
+        } else {
+          icon.className = 'fas fa-eye-slash';
+        }
+      }
+    });
+  }
 
   // Handle Submit
   loginForm.addEventListener('submit', async (e) => {
@@ -60,7 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
         id: response.id,
         name: response.name,
         email: response.email,
-        role: response.role
+        role: response.role,
+        profileImage: response.profileImage
       };
       sessionStorage.setItem('currentUser', JSON.stringify(userSession));
 

@@ -21,12 +21,22 @@ public class Section {
     @Column(name="SectionName", nullable=false)
     private String sectionName;
 
+    @Column(name="AcademicYear", nullable=true)
+    private String academicYear;
+
     public Section() {}
 
     public Section(String departmentCode, Integer yearNumber, String sectionName) {
         this.departmentCode = departmentCode;
         this.yearNumber = yearNumber;
         this.sectionName = sectionName;
+    }
+
+    public Section(String departmentCode, Integer yearNumber, String sectionName, String academicYear) {
+        this.departmentCode = departmentCode;
+        this.yearNumber = yearNumber;
+        this.sectionName = sectionName;
+        this.academicYear = academicYear;
     }
 
     public Long getId() {
@@ -59,5 +69,13 @@ public class Section {
 
     public void setSectionName(String sectionName) {
         this.sectionName = sectionName;
+    }
+
+    public String getAcademicYear() {
+        return academicYear;
+    }
+
+    public void setAcademicYear(String academicYear) {
+        this.academicYear = academicYear;
     }
 }
