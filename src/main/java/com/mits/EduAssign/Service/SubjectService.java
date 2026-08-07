@@ -623,7 +623,7 @@ public class SubjectService {
             }
 
             if (subject.isMock()) {
-                if (hasPreviousMockAllocation(allocation.getFacultyId())) {
+                if (hasPreviousMockAllocation(allocation.getFacultyId(), subject.getAcademicYear())) {
                     throw new IllegalArgumentException("Faculty member has already been allocated a mock subject in a previous year. Only one mock subject is allowed per faculty.");
                 }
                 if (regularCount != 2) {
@@ -882,7 +882,7 @@ public class SubjectService {
                 }
                 
                 if (subject.isMock()) {
-                    if (hasPreviousMockAllocation(fId)) {
+                    if (hasPreviousMockAllocation(fId, subject.getAcademicYear())) {
                         continue; // Mock rules violation
                     }
                     if (regularCount != 2) {
@@ -907,6 +907,7 @@ public class SubjectService {
     public List<SubjectAllocation> autoAllocateForYear(Integer targetYear, Integer hoursLimit, Integer subjectHours, Integer maxSubjects, Integer maxRegular, Integer maxMock, String academicYear, String department, Integer sem) {
         SubjectSelectionWindow window = windowRepository.findById(targetYear).orElse(null);
         List<Subject> allSubjects = subjectRepository.findAll();
+        allSubjects.sort(java.util.Comparator.comparing(Subject::getId));
         if (allSubjects.isEmpty()) {
             throw new IllegalStateException("No subjects found in the Subject Directory. Please add or import subjects first.");
         }
@@ -922,6 +923,12 @@ public class SubjectService {
                          (currentAcademicYear.isEmpty() || currentAcademicYear.equalsIgnoreCase(s.getAcademicYear())) &&
                          NumberHelperIsEqual(s.getYear(), filterYear))
             .collect(Collectors.toList());
+
+        System.out.println("DEBUG autoAllocateForYear targetYear: " + targetYear);
+        System.out.println("DEBUG autoAllocateForYear currentAcademicYear: " + currentAcademicYear);
+        System.out.println("DEBUG autoAllocateForYear filterDepartment: " + filterDepartment);
+        System.out.println("DEBUG autoAllocateForYear filterSem: " + filterSem);
+        System.out.println("DEBUG autoAllocateForYear subjects count: " + subjects.size());
 
         if (subjects.isEmpty()) {
             throw new IllegalStateException("No subjects found matching the selected Academic Year, Department, Semester, and Year.");
@@ -939,6 +946,10 @@ public class SubjectService {
             allocationHistoryRepository.deleteAll(existingHistory);
         }
 
+        allocationRepository.flush();
+        sectionAllocationRepository.flush();
+        allocationHistoryRepository.flush();
+
         int subHours = (subjectHours != null) ? subjectHours : 4;
         int hoursLimitVal = (hoursLimit != null) ? hoursLimit : 14;
         int maxSubsVal = (maxSubjects != null) ? maxSubjects : 3;
@@ -947,9 +958,10 @@ public class SubjectService {
         int maxSubsValForFilter = maxSubsVal;
 
         // Initialize unique tracking sets/maps to scan pre-existing allocations for each faculty in currentAcademicYear
-        java.util.Map<String, java.util.Set<String>> facultyUniqueSubjects = new java.util.HashMap<>();
-        java.util.Map<String, java.util.Set<String>> facultyUniqueSections = new java.util.HashMap<>();
-        java.util.Map<String, Boolean> subjectMockStatus = new java.util.HashMap<>();
+        java.util.Map<String, java.util.Set<String>> facultyUniqueSubjects = new java.util.LinkedHashMap<>();
+        java.util.Map<String, java.util.Set<String>> facultyUniqueSections = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Boolean> subjectMockStatus = new java.util.LinkedHashMap<>();
+        java.util.Set<String> allocatedSubjectsForCurrentRun = new java.util.HashSet<>();
 
         // Seed subject mock status cache
         for (Subject s : allSubjects) {
@@ -968,7 +980,7 @@ public class SubjectService {
             if (!targetSubjectIdsSet.contains(subIdUpper)) {
                 Subject s = subjectRepository.findById(alloc.getSubjectId()).orElse(null);
                 if (s != null && s.getAcademicYear() != null && s.getAcademicYear().equalsIgnoreCase(currentAcademicYear)) {
-                    facultyUniqueSubjects.computeIfAbsent(facId, k -> new java.util.HashSet<>()).add(subIdUpper);
+                    facultyUniqueSubjects.computeIfAbsent(facId, k -> new java.util.LinkedHashSet<>()).add(subIdUpper);
                     subjectMockStatus.put(subIdUpper, s.isMock());
                 }
             }
@@ -983,7 +995,7 @@ public class SubjectService {
             if (!targetSubjectIdsSet.contains(subIdUpper)) {
                 Subject s = subjectRepository.findById(sa.getSubjectId()).orElse(null);
                 if (s != null && s.getAcademicYear() != null && s.getAcademicYear().equalsIgnoreCase(currentAcademicYear)) {
-                    facultyUniqueSections.computeIfAbsent(facId, k -> new java.util.HashSet<>()).add(secKey);
+                    facultyUniqueSections.computeIfAbsent(facId, k -> new java.util.LinkedHashSet<>()).add(secKey);
                 }
             }
         }
@@ -995,10 +1007,10 @@ public class SubjectService {
             String subIdUpper = hist.getSubjectId().toUpperCase();
             if (hist.getAcademicYear() != null && hist.getAcademicYear().equalsIgnoreCase(currentAcademicYear)) {
                 if (!targetSubjectIdsSet.contains(subIdUpper)) {
-                    facultyUniqueSubjects.computeIfAbsent(facId, k -> new java.util.HashSet<>()).add(subIdUpper);
+                    facultyUniqueSubjects.computeIfAbsent(facId, k -> new java.util.LinkedHashSet<>()).add(subIdUpper);
                     if (hist.getSectionName() != null) {
                         String secKey = subIdUpper + "_" + hist.getSectionName().toUpperCase();
-                        facultyUniqueSections.computeIfAbsent(facId, k -> new java.util.HashSet<>()).add(secKey);
+                        facultyUniqueSections.computeIfAbsent(facId, k -> new java.util.LinkedHashSet<>()).add(secKey);
                     }
                     if (!subjectMockStatus.containsKey(subIdUpper)) {
                         Subject s = subjectRepository.findById(hist.getSubjectId()).orElse(null);
@@ -1055,6 +1067,7 @@ public class SubjectService {
                     return existing < maxSubsValForFilter;
                 })
                 .collect(Collectors.toList());
+        allFaculty.sort(java.util.Comparator.comparing(AdminFaculty::getId));
 
         if (allFaculty.isEmpty()) {
             throw new IllegalStateException("No faculty members found to allocate subjects to.");
@@ -1087,8 +1100,8 @@ public class SubjectService {
         }
 
         // Group preferences by faculty and separate mock vs regular to compute choice ranks
-        java.util.Map<String, List<FacultySubjectPreference>> facultyRegularPrefs = new java.util.HashMap<>();
-        java.util.Map<String, List<FacultySubjectPreference>> facultyMockPrefs = new java.util.HashMap<>();
+        java.util.Map<String, List<FacultySubjectPreference>> facultyRegularPrefs = new java.util.LinkedHashMap<>();
+        java.util.Map<String, List<FacultySubjectPreference>> facultyMockPrefs = new java.util.LinkedHashMap<>();
         for (FacultySubjectPreference pref : allPreferences) {
             if (pref.getFacultyId() == null) continue;
             String facId = pref.getFacultyId().toUpperCase();
@@ -1165,6 +1178,7 @@ public class SubjectService {
                     .filter(s -> s.getYearNumber() != null && s.getYearNumber().equals(sub.getYear()) &&
                                  s.getDepartmentCode() != null && s.getDepartmentCode().equalsIgnoreCase(subDeptCode))
                     .collect(Collectors.toList());
+            sections.sort(java.util.Comparator.comparing(Section::getId));
             
             // We require that all sections of the subject are allocated
             for (Section sec : sections) {
@@ -1176,6 +1190,15 @@ public class SubjectService {
                 }
             }
         }
+
+        // Sort pendingSlots deterministically
+        pendingSlots.sort((s1, s2) -> {
+            int yearComp = Integer.compare(s1.subject.getYear(), s2.subject.getYear());
+            if (yearComp != 0) return yearComp;
+            int subComp = s1.subject.getId().compareTo(s2.subject.getId());
+            if (subComp != 0) return subComp;
+            return s1.section.getSectionName().compareTo(s2.section.getSectionName());
+        });
 
         // Phase 1: Allocate section slots based on faculty preferences
         // Compile all preferences into an ordered list across all faculty
@@ -1194,7 +1217,10 @@ public class SubjectService {
             // Third, sort by first-come-first-serve submission order
             Long o1 = facultySubmissionOrder.getOrDefault(p1.getFacultyId().toUpperCase(), Long.MAX_VALUE);
             Long o2 = facultySubmissionOrder.getOrDefault(p2.getFacultyId().toUpperCase(), Long.MAX_VALUE);
-            return o1.compareTo(o2);
+            if (!o1.equals(o2)) {
+                return o1.compareTo(o2);
+            }
+            return Long.compare(p1.getId(), p2.getId());
         });
 
         for (FacultySubjectPreference pref : orderedPrefs) {
@@ -1219,7 +1245,8 @@ public class SubjectService {
             Subject sub = targetSlot.subject;
 
             // Check eligibility for this faculty member
-            boolean isAlreadyAllocatedToSubject = allocationRepository.findBySubjectIdAndFacultyId(sub.getId(), pref.getFacultyId()) != null;
+            String allocKey = sub.getId().toUpperCase() + "_" + facultyIdUpper;
+            boolean isAlreadyAllocatedToSubject = allocatedSubjectsForCurrentRun.contains(allocKey);
 
             int currentHours = facultyWorkloadHours.getOrDefault(facultyIdUpper, 0);
             if (currentHours + subHours > hoursLimitVal) {
@@ -1241,14 +1268,14 @@ public class SubjectService {
                     }
                 }
                 facYears.add(sub.getYear());
-                if (facYears.size() >= maxSubsVal && facYears.stream().distinct().count() == 1) {
+                if (facYears.size() >= 3 && facYears.stream().distinct().count() == 1) {
                     continue; // Violates same year constraint
                 }
 
                 if (sub.isMock()) {
                     int regCount = facultyRegularCount.getOrDefault(facultyIdUpper, 0);
                     int mockCount = facultyMockCount.getOrDefault(facultyIdUpper, 0);
-                    if (regCount != maxRegVal || mockCount >= maxMockVal || hasPreviousMockAllocation(pref.getFacultyId())) {
+                    if (regCount != maxRegVal || mockCount >= maxMockVal || hasPreviousMockAllocation(pref.getFacultyId(), currentAcademicYear)) {
                         continue; // Mock rules violation
                     }
                 } else {
@@ -1268,6 +1295,8 @@ public class SubjectService {
                 SubjectAllocation subAlloc = new SubjectAllocation(sub.getId(), pref.getFacultyId());
                 subAlloc.setFinalized(false);
                 allocationRepository.save(subAlloc);
+
+                allocatedSubjectsForCurrentRun.add(allocKey);
 
                 facultySubjectCount.put(facultyIdUpper, facultySubjectCount.getOrDefault(facultyIdUpper, 0) + 1);
                 if (sub.isMock()) {
@@ -1290,7 +1319,8 @@ public class SubjectService {
             for (AdminFaculty f : allFaculty) {
                 String fIdUpper = f.getId().toUpperCase();
 
-                boolean isAlreadyAllocatedToSubject = allocationRepository.findBySubjectIdAndFacultyId(sub.getId(), f.getId()) != null;
+                String allocKey = sub.getId().toUpperCase() + "_" + fIdUpper;
+                boolean isAlreadyAllocatedToSubject = allocatedSubjectsForCurrentRun.contains(allocKey);
                 int currentHours = facultyWorkloadHours.getOrDefault(fIdUpper, 0);
 
                 // Check workload hours
@@ -1313,14 +1343,14 @@ public class SubjectService {
                         }
                     }
                     facYears.add(sub.getYear());
-                    if (facYears.size() >= maxSubsVal && facYears.stream().distinct().count() == 1) {
+                    if (facYears.size() >= 3 && facYears.stream().distinct().count() == 1) {
                         continue; // Violates same year constraint
                     }
 
                     if (sub.isMock()) {
                         int regCount = facultyRegularCount.getOrDefault(fIdUpper, 0);
                         int mockCount = facultyMockCount.getOrDefault(fIdUpper, 0);
-                        if (regCount != maxRegVal || mockCount >= maxMockVal || hasPreviousMockAllocation(f.getId())) {
+                        if (regCount != maxRegVal || mockCount >= maxMockVal || hasPreviousMockAllocation(f.getId(), currentAcademicYear)) {
                             continue;
                         }
                     } else {
@@ -1343,7 +1373,8 @@ public class SubjectService {
                     if (h1 != h2) return Integer.compare(h1, h2);
                     int s1 = facultySubjectCount.getOrDefault(f1.getId().toUpperCase(), 0);
                     int s2 = facultySubjectCount.getOrDefault(f2.getId().toUpperCase(), 0);
-                    return Integer.compare(s1, s2);
+                    if (s1 != s2) return Integer.compare(s1, s2);
+                    return f1.getId().toUpperCase().compareTo(f2.getId().toUpperCase());
                 });
                 chosenFaculty = eligibleFaculty.get(0);
             } else {
@@ -1352,7 +1383,8 @@ public class SubjectService {
                 List<AdminFaculty> relaxedFaculty = new ArrayList<>();
                 for (AdminFaculty f : allFaculty) {
                     String fIdUpper = f.getId().toUpperCase();
-                    boolean isAlreadyAllocatedToSubject = allocationRepository.findBySubjectIdAndFacultyId(sub.getId(), f.getId()) != null;
+                    String allocKey = sub.getId().toUpperCase() + "_" + fIdUpper;
+                    boolean isAlreadyAllocatedToSubject = allocatedSubjectsForCurrentRun.contains(allocKey);
                     
                     // 1. Check workload limit
                     int currentHours = facultyWorkloadHours.getOrDefault(fIdUpper, 0);
@@ -1369,7 +1401,7 @@ public class SubjectService {
                         if (sub.isMock()) {
                             int regCount = facultyRegularCount.getOrDefault(fIdUpper, 0);
                             int mockCount = facultyMockCount.getOrDefault(fIdUpper, 0);
-                            if (regCount != maxRegVal || mockCount >= maxMockVal || hasPreviousMockAllocation(f.getId())) {
+                            if (regCount != maxRegVal || mockCount >= maxMockVal || hasPreviousMockAllocation(f.getId(), currentAcademicYear)) {
                                 continue;
                             }
                         } else {
@@ -1389,7 +1421,8 @@ public class SubjectService {
                     if (h1 != h2) return Integer.compare(h1, h2);
                     int s1 = facultySubjectCount.getOrDefault(f1.getId().toUpperCase(), 0);
                     int s2 = facultySubjectCount.getOrDefault(f2.getId().toUpperCase(), 0);
-                    return Integer.compare(s1, s2);
+                    if (s1 != s2) return Integer.compare(s1, s2);
+                    return f1.getId().toUpperCase().compareTo(f2.getId().toUpperCase());
                 });
                 
                 if (!relaxedFaculty.isEmpty()) {
@@ -1408,7 +1441,8 @@ public class SubjectService {
                     // Check constraints for this virtual unknown faculty
                     int currentHours = facultyWorkloadHours.getOrDefault(unknownId, 0);
                     if (currentHours + subHours <= hoursLimitVal) {
-                        boolean isAlreadyAllocatedToSubject = allocationRepository.findBySubjectIdAndFacultyId(sub.getId(), unknownId) != null;
+                        String allocKey = sub.getId().toUpperCase() + "_" + unknownId.toUpperCase();
+                        boolean isAlreadyAllocatedToSubject = allocatedSubjectsForCurrentRun.contains(allocKey);
                         boolean canAllocate = true;
                         
                         if (!isAlreadyAllocatedToSubject) {
@@ -1444,11 +1478,13 @@ public class SubjectService {
                 sa.setFinalized(false);
                 sectionAllocationRepository.save(sa);
                 
-                boolean isAlreadyAllocatedToSubject = allocationRepository.findBySubjectIdAndFacultyId(sub.getId(), targetUnknownId) != null;
+                String allocKey = sub.getId().toUpperCase() + "_" + targetUnknownId.toUpperCase();
+                boolean isAlreadyAllocatedToSubject = allocatedSubjectsForCurrentRun.contains(allocKey);
                 if (!isAlreadyAllocatedToSubject) {
                     SubjectAllocation subAlloc = new SubjectAllocation(sub.getId(), targetUnknownId);
                     subAlloc.setFinalized(false);
                     allocationRepository.save(subAlloc);
+                    allocatedSubjectsForCurrentRun.add(allocKey);
                     
                     facultySubjectCount.put(targetUnknownId, facultySubjectCount.getOrDefault(targetUnknownId, 0) + 1);
                     if (sub.isMock()) {
@@ -1465,7 +1501,8 @@ public class SubjectService {
 
             if (chosenFaculty != null) {
                 String fIdUpper = chosenFaculty.getId().toUpperCase();
-                boolean isAlreadyAllocatedToSubject = allocationRepository.findBySubjectIdAndFacultyId(sub.getId(), chosenFaculty.getId()) != null;
+                String allocKey = sub.getId().toUpperCase() + "_" + fIdUpper;
+                boolean isAlreadyAllocatedToSubject = allocatedSubjectsForCurrentRun.contains(allocKey);
 
                 SectionAllocation sa = new SectionAllocation(sub.getId(), slot.section.getSectionName(), chosenFaculty.getId());
                 sa.setFinalized(false);
@@ -1475,6 +1512,7 @@ public class SubjectService {
                     SubjectAllocation subAlloc = new SubjectAllocation(sub.getId(), chosenFaculty.getId());
                     subAlloc.setFinalized(false);
                     allocationRepository.save(subAlloc);
+                    allocatedSubjectsForCurrentRun.add(allocKey);
 
                     facultySubjectCount.put(fIdUpper, facultySubjectCount.getOrDefault(fIdUpper, 0) + 1);
                     if (sub.isMock()) {
@@ -1930,15 +1968,12 @@ public class SubjectService {
         return false;
     }
 
-    public boolean hasPreviousMockAllocation(String facultyId) {
+    public boolean hasPreviousMockAllocation(String facultyId, String currentAcademicYear) {
         if (facultyId == null) {
             return false;
         }
         String facultyIdUpper = facultyId.trim().toUpperCase();
-        
-        // Get current academic year from active selection window
-        SubjectSelectionWindow window = windowRepository.findTopByOrderByIdDesc();
-        String currentAcademicYear = (window != null && window.getAcademicYear() != null) ? window.getAcademicYear().trim() : "";
+        String academicYearVal = (currentAcademicYear != null) ? currentAcademicYear.trim() : "";
 
         // Check current finalized subject allocations from a different academic year
         List<SubjectAllocation> currentAllocs = allocationRepository.findByFacultyId(facultyIdUpper);
@@ -1948,7 +1983,7 @@ public class SubjectService {
                 Subject s = subjectRepository.findById(alloc.getSubjectId()).orElse(null);
                 if (s != null && s.isMock() && alloc.isFinalized()) {
                     String allocYear = s.getAcademicYear() != null ? s.getAcademicYear().trim() : "";
-                    if (currentAcademicYear.isEmpty() || !allocYear.equalsIgnoreCase(currentAcademicYear)) {
+                    if (academicYearVal.isEmpty() || !allocYear.equalsIgnoreCase(academicYearVal)) {
                         return true;
                     }
                 }
@@ -1961,7 +1996,7 @@ public class SubjectService {
             for (AllocationHistory hist : historicalAllocs) {
                 if (hist.getSubjectId() == null) continue;
                 String histYear = hist.getAcademicYear() != null ? hist.getAcademicYear().trim() : "";
-                if (currentAcademicYear.isEmpty() || !histYear.equalsIgnoreCase(currentAcademicYear)) {
+                if (academicYearVal.isEmpty() || !histYear.equalsIgnoreCase(academicYearVal)) {
                     Subject s = subjectRepository.findById(hist.getSubjectId()).orElse(null);
                     if (s != null && s.isMock()) {
                         return true;

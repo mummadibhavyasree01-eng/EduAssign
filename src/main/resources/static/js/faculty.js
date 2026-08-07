@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const badge = document.getElementById('selection-status-badge');
       const banner = document.getElementById('deadline-banner');
       
-      const activeWindows = Array.isArray(allWindows) ? allWindows.filter(w => w.active && new Date(w.deadline) > new Date()) : (allWindows && allWindows.active && new Date(allWindows.deadline) > new Date() ? [allWindows] : []);
+      const activeWindows = Array.isArray(allWindows) ? allWindows.filter(w => w.active && [1, 2, 3, 4].includes(w.id) && new Date(w.deadline) > new Date()) : (allWindows && allWindows.active && [1, 2, 3, 4].includes(allWindows.id) && new Date(allWindows.deadline) > new Date() ? [allWindows] : []);
       
       if (activeWindows.length === 0) {
         isSelectionPeriodActive = false;
@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       subjects = Array.isArray(allSubjects) ? allSubjects : [];
       facultyPreferences = Array.isArray(preferences) ? preferences : [];
 
-      const activeWindows = Array.isArray(res[2]) ? res[2].filter(w => w.active) : (res[2] && res[2].active ? [res[2]] : []);
+      const activeWindows = Array.isArray(res[2]) ? res[2].filter(w => w.active && [1, 2, 3, 4].includes(w.id)) : (res[2] && res[2].active && [1, 2, 3, 4].includes(res[2].id) ? [res[2]] : []);
       selectionWindow = activeWindows[0] || null;
 
       let isAlreadyFullyAllocated = false;

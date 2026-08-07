@@ -61,7 +61,7 @@ public class FacultyController {
 
     @GetMapping("/has-mock-allocation/{facultyId}")
     public ResponseEntity<Boolean> hasMockAllocation(@PathVariable String facultyId) {
-        return ResponseEntity.ok(subjectService.hasPreviousMockAllocation(facultyId));
+        return ResponseEntity.ok(subjectService.hasPreviousMockAllocation(facultyId, null));
     }
 
     @PutMapping("/update")

@@ -1590,7 +1590,13 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
     cb.addEventListener('change', updateSubjectsPreview);
   });
 
+  let adminCountdownInterval = null;
+
   async function loadDeadlineStatus() {
+    if (adminCountdownInterval) {
+      clearInterval(adminCountdownInterval);
+      adminCountdownInterval = null;
+    }
     const statusContainer = document.getElementById('deadline-status-container');
     statusContainer.innerHTML = `<div style="color: var(--text-muted);"><i class="fas fa-circle-notch fa-spin"></i> Loading...</div>`;
 
@@ -1602,7 +1608,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       const submitBtn = document.querySelector('#deadline-form button[type="submit"]');
       let isRunning = false;
       
-      const activeWindows = Array.isArray(allWindows) ? allWindows.filter(w => w.active && new Date(w.deadline) > new Date()) : (allWindows && allWindows.active && new Date(allWindows.deadline) > new Date() ? [allWindows] : []);
+      const activeWindows = Array.isArray(allWindows) ? allWindows.filter(w => w.active && [1, 2, 3, 4].includes(w.id) && new Date(w.deadline) > new Date()) : (allWindows && allWindows.active && [1, 2, 3, 4].includes(allWindows.id) && new Date(allWindows.deadline) > new Date() ? [allWindows] : []);
       if (activeWindows.length > 0) {
         isRunning = true;
       }
@@ -1682,11 +1688,12 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
             const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
             const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
             statusHTML += `
               <span class="status-badge active" style="font-size:0.7rem; padding: 2px 8px; border-radius: 12px; background: rgba(20,184,166,0.1); color: var(--secondary); border: 1px solid rgba(20,184,166,0.2);"><i class="fas fa-hourglass-half animate-pulse"></i> RUNNING</span>
             </div>
             <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">
-              <div style="color: var(--secondary); font-size: 1.1rem; font-weight: 700; margin-bottom: 4px;">Remaining: ${days}d ${hours}h ${mins}m</div>
+              <div class="admin-countdown-time" data-deadline="${win.deadline}" data-year="${y}" style="color: var(--secondary); font-size: 1.1rem; font-weight: 700; margin-bottom: 4px;">Remaining: ${days}d ${hours}h ${mins}m ${secs}s</div>
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
                 <div>Semester: <strong>Sem ${win.sem}</strong></div>
                 <div>Dept: <strong>${win.department}</strong></div>
@@ -1712,6 +1719,40 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       
       statusHTML += '</div>';
       statusContainer.innerHTML = statusHTML;
+
+      const updateAdminCountdowns = () => {
+        const timerElements = document.querySelectorAll('.admin-countdown-time');
+        const now = new Date();
+        let anyActive = false;
+        
+        timerElements.forEach(el => {
+          const deadlineStr = el.getAttribute('data-deadline');
+          const deadlineTime = new Date(deadlineStr);
+          const diffMs = deadlineTime - now;
+          
+          if (diffMs <= 0) {
+            el.innerHTML = 'Expired';
+          } else {
+            anyActive = true;
+            const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
+            el.innerHTML = `Remaining: ${days}d ${hours}h ${mins}m ${secs}s`;
+          }
+        });
+        
+        if (!anyActive && timerElements.length > 0) {
+          clearInterval(adminCountdownInterval);
+          adminCountdownInterval = null;
+          loadDeadlineStatus();
+        }
+      };
+      
+      const activeTimers = document.querySelectorAll('.admin-countdown-time');
+      if (activeTimers.length > 0) {
+        adminCountdownInterval = setInterval(updateAdminCountdowns, 1000);
+      }
 
       updateSubjectsPreview();
 
@@ -1821,7 +1862,8 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
     
     try {
       const allWindows = await apiRequest('/adminfaculty/deadline');
-      selectionWindow = Array.isArray(allWindows) ? (allWindows.find(w => w.active) || allWindows.find(w => w.academicYear && w.department) || allWindows[0]) : allWindows;
+      const validWindows = Array.isArray(allWindows) ? allWindows.filter(w => [1, 2, 3, 4].includes(w.id)) : (allWindows && [1, 2, 3, 4].includes(allWindows.id) ? [allWindows] : []);
+      selectionWindow = validWindows.find(w => w.active) || validWindows.find(w => w.academicYear && w.department) || validWindows[0] || allWindows;
       
       let isBefore = false;
       if (selectionWindow && selectionWindow.active) {
@@ -1865,17 +1907,20 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
 
   async function calculateAllocationStats() {
     try {
-      const [subjects, allocations, sectionAllocs, allWindows] = await Promise.all([
+      const [subjects, allocations, sectionAllocs, allWindows, faculties] = await Promise.all([
         apiRequest('/subject/viewAll'),
         apiRequest('/adminfaculty/allocations'),
         apiRequest('/adminfaculty/section-allocations'),
-        apiRequest('/adminfaculty/deadline')
+        apiRequest('/adminfaculty/deadline'),
+        apiRequest('/adminfaculty/viewfaculty')
       ]);
-      const selectionWindow = Array.isArray(allWindows) ? (allWindows.find(w => w.active) || allWindows.find(w => w.academicYear && w.department) || allWindows[0]) : allWindows;
+      const validWindows = Array.isArray(allWindows) ? allWindows.filter(w => [1, 2, 3, 4].includes(w.id)) : (allWindows && [1, 2, 3, 4].includes(allWindows.id) ? [allWindows] : []);
+      const selectionWindow = validWindows.find(w => w.active) || validWindows.find(w => w.academicYear && w.department) || validWindows[0] || allWindows;
 
       const subList = Array.isArray(subjects) ? subjects : [];
       const allocList = Array.isArray(allocations) ? allocations : [];
       const secList = Array.isArray(sectionAllocs) ? sectionAllocs : [];
+      const activeFacultyIds = new Set(Array.isArray(faculties) ? faculties.map(f => f.id.toLowerCase()) : []);
 
       const selectedYearCbs = document.querySelectorAll('.allocate-year-checkbox:checked');
       const selectedYears = Array.from(selectedYearCbs).map(cb => Number(cb.value));
@@ -1925,7 +1970,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
 
       const secAllocMap = {};
       secList.forEach(sa => {
-        if (sa.subjectId && sa.sectionName) {
+        if (sa.subjectId && sa.sectionName && sa.facultyId && (sa.facultyId.toUpperCase().startsWith("UNKNOWN_") || activeFacultyIds.has(sa.facultyId.toLowerCase()))) {
           secAllocMap[sa.subjectId.toUpperCase() + "_" + sa.sectionName.toUpperCase()] = sa;
         }
       });
@@ -1941,7 +1986,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         activeSections.forEach(sec => {
           let isSectionFullyAllocated = true;
           subjectsInWindow.forEach(sub => {
-            if (sub.id && sec.sectionName) {
+            if (sub.id && sec.sectionName && Number(sub.year) === Number(sec.yearNumber)) {
               const key = sub.id.toUpperCase() + "_" + sec.sectionName.toUpperCase();
               if (!secAllocMap[key]) {
                 isSectionFullyAllocated = false;
@@ -2001,7 +2046,8 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         apiRequest('/subject/viewAll'),
         apiRequest(`/faculty/has-mock-allocation/${facId}`).catch(() => false)
       ]);
-      const selectionWindow = Array.isArray(allWindows) ? (allWindows.find(w => w.active) || allWindows.find(w => w.academicYear && w.department) || allWindows[0]) : allWindows;
+      const validWindows = Array.isArray(allWindows) ? allWindows.filter(w => [1, 2, 3, 4].includes(w.id)) : (allWindows && [1, 2, 3, 4].includes(allWindows.id) ? [allWindows] : []);
+      const selectionWindow = validWindows.find(w => w.active) || validWindows.find(w => w.academicYear && w.department) || validWindows[0] || allWindows;
 
       const subList = Array.isArray(subjects) ? subjects : [];
       const allocList = Array.isArray(allocations) ? allocations : [];
@@ -2226,7 +2272,8 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         apiRequest('/adminfaculty/deadline'),
         apiRequest('/faculty/preferences/all')
       ]);
-      const selectionWindow = Array.isArray(allWindows) ? (allWindows.find(w => w.active) || allWindows.find(w => w.academicYear && w.department) || allWindows[0]) : allWindows;
+      const validWindows = Array.isArray(allWindows) ? allWindows.filter(w => [1, 2, 3, 4].includes(w.id)) : (allWindows && [1, 2, 3, 4].includes(allWindows.id) ? [allWindows] : []);
+      const selectionWindow = validWindows.find(w => w.active) || validWindows.find(w => w.academicYear && w.department) || validWindows[0] || allWindows;
 
       const subList = Array.isArray(subjects) ? subjects : [];
       
@@ -2246,9 +2293,11 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
 
       const allocList = (Array.isArray(allocations) ? allocations : [])
         .filter(a => a.subjectId && activeSubjectIds.has(a.subjectId.toUpperCase()));
-      const secList = (Array.isArray(sectionAllocs) ? sectionAllocs : [])
-        .filter(sa => sa.subjectId && activeSubjectIds.has(sa.subjectId.toUpperCase()));
       const facList = Array.isArray(faculty) ? faculty : [];
+      const activeFacultyIds = new Set(facList.map(f => f.id.toLowerCase()));
+      const secList = (Array.isArray(sectionAllocs) ? sectionAllocs : [])
+        .filter(sa => sa.subjectId && activeSubjectIds.has(sa.subjectId.toUpperCase()))
+        .filter(sa => sa.facultyId && (sa.facultyId.toUpperCase().startsWith("UNKNOWN_") || activeFacultyIds.has(sa.facultyId.toLowerCase())));
 
       const facultyMap = {};
       facList.forEach(f => {
@@ -2604,10 +2653,18 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       autoBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Allocating...';
     }
 
+    const selectedYearCbs = document.querySelectorAll('.allocate-year-checkbox:checked');
+    const selectedYears = Array.from(selectedYearCbs).map(cb => Number(cb.value));
+
     try {
       // Check window active state and stop if active
-      const windowStatus = await apiRequest('/adminfaculty/deadline');
-      let isActiveWindow = windowStatus && windowStatus.active && new Date() < new Date(windowStatus.deadline);
+      const allWindows = await apiRequest('/adminfaculty/deadline');
+      let isActiveWindow = false;
+      if (Array.isArray(allWindows)) {
+        isActiveWindow = allWindows.some(w => w.active && selectedYears.includes(w.year) && new Date(w.deadline) > new Date());
+      } else if (allWindows) {
+        isActiveWindow = allWindows.active && selectedYears.includes(allWindows.year) && new Date(allWindows.deadline) > new Date();
+      }
 
       let proceed = true;
       if (isActiveWindow) {
@@ -2658,9 +2715,6 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         if (selectionWindow.department) params.append('department', selectionWindow.department);
         if (selectionWindow.sem) params.append('sem', selectionWindow.sem);
       }
-      
-      const selectedYearCbs = document.querySelectorAll('.allocate-year-checkbox:checked');
-      const selectedYears = Array.from(selectedYearCbs).map(cb => Number(cb.value));
       selectedYears.forEach(y => params.append('years', y));
 
       await apiRequest(`/adminfaculty/auto-allocate?${params.toString()}`, { method: 'POST' });
@@ -2847,7 +2901,9 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
     // Fetch the active selection window if not loaded
     if (!selectionWindow) {
       try {
-        selectionWindow = await apiRequest('/adminfaculty/deadline');
+        const allWindows = await apiRequest('/adminfaculty/deadline');
+        const validWindows = Array.isArray(allWindows) ? allWindows.filter(w => [1, 2, 3, 4].includes(w.id)) : (allWindows && [1, 2, 3, 4].includes(allWindows.id) ? [allWindows] : []);
+        selectionWindow = validWindows.find(w => w.active) || validWindows.find(w => w.academicYear && w.department) || validWindows[0] || allWindows;
       } catch (e) {
         console.error('Error fetching selection window for report:', e);
       }
@@ -3117,10 +3173,11 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
     // Populate lists asynchronously
     (async () => {
       try {
-        const [allSecAllocs, allSections, allSubjects] = await Promise.all([
+        const [allSecAllocs, allSections, allSubjects, faculties] = await Promise.all([
           apiRequest('/adminfaculty/section-allocations'),
           apiRequest('/sections/all'),
-          apiRequest('/subject/viewAll')
+          apiRequest('/subject/viewAll'),
+          apiRequest('/adminfaculty/viewfaculty')
         ]);
 
         const deptVal = document.getElementById('report-dept-select') ? document.getElementById('report-dept-select').value : '';
@@ -3159,22 +3216,15 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         });
 
         // Gather pending sections
+        const activeFacultyIds = new Set(Array.isArray(faculties) ? faculties.map(f => f.id.toLowerCase()) : []);
         const pendingSections = [];
         activeSubjects.forEach(sub => {
-          // Check if this subject is allocated to an unknown faculty
-          const isAssignedToUnknown = allSecAllocs.some(alloc => 
-            alloc.subjectId && alloc.subjectId.toLowerCase() === sub.id.toLowerCase() &&
-            alloc.facultyId && alloc.facultyId.toUpperCase().startsWith("UNKNOWN_")
-          );
-          if (isAssignedToUnknown) {
-            return;
-          }
-
           const subSections = deptSections.filter(sec => Number(sec.yearNumber) === Number(sub.year));
           subSections.forEach(sec => {
             const isAllocated = allSecAllocs.some(alloc => 
               alloc.subjectId && alloc.subjectId.toLowerCase() === sub.id.toLowerCase() &&
-              alloc.sectionName && alloc.sectionName.toUpperCase() === sec.sectionName.toUpperCase()
+              alloc.sectionName && alloc.sectionName.toUpperCase() === sec.sectionName.toUpperCase() &&
+              alloc.facultyId && (alloc.facultyId.toUpperCase().startsWith("UNKNOWN_") || activeFacultyIds.has(alloc.facultyId.toLowerCase()))
             );
             if (!isAllocated) {
               pendingSections.push({
@@ -3364,10 +3414,11 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
     if (!listEl || !containerEl) return;
 
     try {
-      const [allSecAllocs, allSections, allSubjects] = await Promise.all([
+      const [allSecAllocs, allSections, allSubjects, faculties] = await Promise.all([
         apiRequest('/adminfaculty/section-allocations'),
         apiRequest('/sections/all'),
-        apiRequest('/subject/viewAll')
+        apiRequest('/subject/viewAll'),
+        apiRequest('/adminfaculty/viewfaculty')
       ]);
 
       const deptVal = document.getElementById('report-dept-select') ? document.getElementById('report-dept-select').value : '';
@@ -3389,22 +3440,15 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
 
       const deptSections = allSections.filter(sec => sec.departmentCode && sec.departmentCode.toUpperCase() === deptVal.toUpperCase());
 
+      const activeFacultyIds = new Set(Array.isArray(faculties) ? faculties.map(f => f.id.toLowerCase()) : []);
       const pendingSections = [];
       activeSubjects.forEach(sub => {
-        // Check if this subject is allocated to an unknown faculty
-        const isAssignedToUnknown = allSecAllocs.some(alloc => 
-          alloc.subjectId && alloc.subjectId.toLowerCase() === sub.id.toLowerCase() &&
-          alloc.facultyId && alloc.facultyId.toUpperCase().startsWith("UNKNOWN_")
-        );
-        if (isAssignedToUnknown) {
-          return;
-        }
-
         const subSections = deptSections.filter(sec => Number(sec.yearNumber) === Number(sub.year));
         subSections.forEach(sec => {
           const isAllocated = allSecAllocs.some(alloc => 
             alloc.subjectId && alloc.subjectId.toLowerCase() === sub.id.toLowerCase() &&
-            alloc.sectionName && alloc.sectionName.toUpperCase() === sec.sectionName.toUpperCase()
+            alloc.sectionName && alloc.sectionName.toUpperCase() === sec.sectionName.toUpperCase() &&
+            alloc.facultyId && (alloc.facultyId.toUpperCase().startsWith("UNKNOWN_") || activeFacultyIds.has(alloc.facultyId.toLowerCase()))
           );
           if (!isAllocated) {
             pendingSections.push({
