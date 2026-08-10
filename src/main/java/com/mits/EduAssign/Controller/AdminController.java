@@ -82,17 +82,19 @@ public class AdminController {
 	    public ResponseEntity<?> updateFaculty(
 	            @PathVariable String id,
 	            @RequestBody AdminFaculty faculty) {
-
-	        AdminFaculty updated =
-	                adminService.updateFaculty(id, faculty);
-
-	        if (updated == null) {
-	            return ResponseEntity
-	                    .status(HttpStatus.NOT_FOUND)
-	                    .body("Faculty Not Found");
+	        try {
+	            AdminFaculty updated = adminService.updateFaculty(id, faculty);
+	            if (updated == null) {
+	                return ResponseEntity
+	                        .status(HttpStatus.NOT_FOUND)
+	                        .body("Faculty Not Found");
+	            }
+	            return ResponseEntity.ok(updated);
+	        } catch (IllegalArgumentException e) {
+	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+	        } catch (Exception e) {
+	            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error updating faculty: " + e.getMessage());
 	        }
-
-	        return ResponseEntity.ok(updated);
 	    }
 	    @DeleteMapping("/deleteFaculty/{id}")
 	    public ResponseEntity<?> deleteFaculty(
@@ -208,7 +210,7 @@ public class AdminController {
 	        }
 	    }
 
-	    @DeleteMapping("/delete-allocation/{id}")
+	    @DeleteMapping({"/delete-allocation/{id}", "/allocation/{id}"})
 	    public ResponseEntity<?> deleteAllocation(@PathVariable Long id) {
 	        boolean deleted = subjectService.deleteAllocation(id);
 	        if (!deleted) {
@@ -236,7 +238,7 @@ public class AdminController {
 	        return ResponseEntity.ok(subjectService.getAllSectionAllocations());
 	    }
 
-	    @DeleteMapping("/delete-section-allocation/{id}")
+	    @DeleteMapping({"/delete-section-allocation/{id}", "/section-allocation/{id}"})
 	    public ResponseEntity<?> deleteSectionAllocation(@PathVariable Long id) {
 	        boolean deleted = subjectService.deleteSectionAllocation(id);
 	        if (!deleted) {
@@ -309,6 +311,11 @@ public class AdminController {
 	        } catch (Exception e) {
 	            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error performing auto-allocation: " + e.getMessage());
 	        }
+	    }
+
+	    @GetMapping("/allocation-explanations")
+	    public ResponseEntity<?> getAllocationExplanations() {
+	        return ResponseEntity.ok(subjectService.getLatestAllocationExplanations());
 	    }
 
 	    @PostMapping("/history/upload")

@@ -197,13 +197,16 @@ function cleanSubjectCode(id) {
 document.addEventListener('click', function(e) {
   const toggle = e.target.closest('.password-toggle');
   if (toggle) {
-    const input = toggle.parentNode.querySelector('input');
+    e.preventDefault();
+    e.stopPropagation();
+    const container = toggle.closest('.input-wrapper') || toggle.closest('.password-toggle-wrapper') || toggle.parentNode;
+    const input = container ? container.querySelector('input') : null;
     if (input) {
-      const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
-      input.setAttribute('type', type);
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
       const icon = toggle.querySelector('i');
       if (icon) {
-        if (type === 'text') {
+        if (isPassword) {
           icon.className = 'fas fa-eye-slash';
         } else {
           icon.className = 'fas fa-eye';

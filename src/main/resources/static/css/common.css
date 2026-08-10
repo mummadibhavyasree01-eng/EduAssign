@@ -417,6 +417,29 @@ select option {
   color: var(--primary);
 }
 
+/* File Clear / Remove Button */
+.file-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.15);
+  color: #EF4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  margin-left: 8px;
+  vertical-align: middle;
+  transition: all 0.2s ease;
+  font-size: 0.75rem;
+}
+.file-clear-btn:hover {
+  background: #EF4444;
+  color: #ffffff;
+  transform: scale(1.1);
+}
+
 /* User Avatar Header Styles */
 .user-avatar-wrapper {
   width: 40px;

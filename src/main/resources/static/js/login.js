@@ -9,23 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const passwordInput = document.getElementById('password');
   const togglePassword = document.getElementById('toggle-password');
 
-  // Toggle Password Visibility
-  if (togglePassword && passwordInput) {
-    togglePassword.addEventListener('click', function() {
-      const type = passwordInput.type === 'password' ? 'text' : 'password';
-      passwordInput.type = type;
-      
-      // Toggle eye icon
-      const icon = this.querySelector('i');
-      if (icon) {
-        if (type === 'password') {
-          icon.className = 'fas fa-eye';
-        } else {
-          icon.className = 'fas fa-eye-slash';
-        }
-      }
-    });
-  }
+
 
   // Handle Submit
   loginForm.addEventListener('submit', async (e) => {

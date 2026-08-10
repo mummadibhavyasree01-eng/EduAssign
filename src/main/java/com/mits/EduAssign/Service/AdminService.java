@@ -21,6 +21,9 @@ AdminRepository adminRepository;
 
 @Autowired
 private JdbcTemplate jdbcTemplate;
+
+@Autowired
+private jakarta.persistence.EntityManager entityManager;
 	public AdminFaculty login(String email, String password) {
 		if (email == null || password == null) return null;
 		String search = email.trim();
@@ -116,28 +119,61 @@ private JdbcTemplate jdbcTemplate;
 		return adminRepository.save(faculty);
 	}
 	
-		public AdminFaculty updateFaculty(String id, AdminFaculty updatedFaculty) {
-
-		    AdminFaculty faculty =
-		            adminRepository.findById(id).orElse(null);
-
-		    if (faculty == null) {
-		        return null;
-		    }
-
-		    if(updatedFaculty.getName() != null)
-		        faculty.setName(updatedFaculty.getName());
-
-		    if(updatedFaculty.getEmail() != null)
-		        faculty.setEmail(updatedFaculty.getEmail());
-
-		    if (updatedFaculty.getPassword() != null && !updatedFaculty.getPassword().trim().isEmpty()) {
-		        faculty.setPassword(updatedFaculty.getPassword().trim());
-		    }
-		    
-		    faculty.setRole("faculty");
-		    return adminRepository.save(faculty);
+	@org.springframework.transaction.annotation.Transactional
+	public AdminFaculty updateFaculty(String id, AdminFaculty updatedFaculty) {
+		AdminFaculty existing = adminRepository.findById(id).orElse(null);
+		if (existing == null) {
+			return null;
 		}
+
+		String newId = (updatedFaculty.getId() != null && !updatedFaculty.getId().trim().isEmpty())
+				? updatedFaculty.getId().trim()
+				: id;
+		String name = (updatedFaculty.getName() != null && !updatedFaculty.getName().trim().isEmpty())
+				? updatedFaculty.getName().trim()
+				: existing.getName();
+		String email = (updatedFaculty.getEmail() != null && !updatedFaculty.getEmail().trim().isEmpty())
+				? updatedFaculty.getEmail().trim()
+				: existing.getEmail();
+		String password = (updatedFaculty.getPassword() != null && !updatedFaculty.getPassword().trim().isEmpty())
+				? updatedFaculty.getPassword().trim()
+				: existing.getPassword();
+		String role = (existing.getRole() != null) ? existing.getRole() : "faculty";
+
+		// If the ID is being changed
+		if (!newId.equalsIgnoreCase(id)) {
+			if (adminRepository.existsById(newId)) {
+				throw new IllegalArgumentException("Faculty ID '" + newId + "' is already in use by another faculty member.");
+			}
+
+			// 1. Update referencing foreign keys across all related tables
+			jdbcTemplate.update("UPDATE faculty_subject_preference SET faculty_id = ? WHERE faculty_id = ?", newId, id);
+			jdbcTemplate.update("UPDATE subject_allocation SET faculty_id = ? WHERE faculty_id = ?", newId, id);
+			jdbcTemplate.update("UPDATE section_allocation SET faculty_id = ? WHERE faculty_id = ?", newId, id);
+			jdbcTemplate.update("UPDATE allocation_history SET faculty_id = ? WHERE faculty_id = ?", newId, id);
+
+			// 2. Update primary key and details in admin_faculty table
+			jdbcTemplate.update("UPDATE admin_faculty SET id = ?, name = ?, email_id = ?, password = ?, role = ? WHERE id = ?",
+					newId, name, email, password, role, id);
+		} else {
+			// ID unchanged, standard update
+			jdbcTemplate.update("UPDATE admin_faculty SET name = ?, email_id = ?, password = ?, role = ? WHERE id = ?",
+					name, email, password, role, id);
+		}
+
+		AdminFaculty result = new AdminFaculty();
+		result.setId(newId);
+		result.setName(name);
+		result.setEmail(email);
+		result.setPassword(password);
+		result.setRole(role);
+		result.setProfileImage(existing.getProfileImage());
+
+		if (entityManager != null) {
+			entityManager.clear();
+		}
+		return result;
+	}
 	public boolean deleteFaculty(String id) {
 
 	    if (!adminRepository.existsById(id)) {
@@ -150,12 +186,15 @@ private JdbcTemplate jdbcTemplate;
 	        jdbcTemplate.update("DELETE FROM subject_allocation WHERE faculty_id = ?", id);
 	        jdbcTemplate.update("DELETE FROM section_allocation WHERE faculty_id = ?", id);
 	        jdbcTemplate.update("DELETE FROM allocation_history WHERE faculty_id = ?", id);
+	        jdbcTemplate.update("DELETE FROM admin_faculty WHERE id = ?", id);
+	        if (entityManager != null) {
+	            entityManager.clear();
+	        }
+	        return true;
 	    } catch (Exception e) {
-	        System.err.println("Error deleting faculty references: " + e.getMessage());
+	        System.err.println("Error deleting faculty " + id + ": " + e.getMessage());
+	        return false;
 	    }
-
-	    adminRepository.deleteById(id);
-	    return true;
 	}
 	public AdminFaculty updateProfilef(String id,
             AdminFaculty updatedFaculty) {
@@ -218,6 +257,9 @@ if (updatedAdmin.getProfileImage() != null) {
 return adminRepository.save(admin);
 }
 	public List<AdminFaculty> viewFaculty() {
+		if (entityManager != null) {
+			entityManager.clear();
+		}
 		List<AdminFaculty> list = adminRepository.findAll().stream()
 				.filter(user -> "faculty".equalsIgnoreCase(user.getRole()) || 
 				               ("admin".equalsIgnoreCase(user.getRole()) && !"ADMIN01".equalsIgnoreCase(user.getId())))

@@ -196,7 +196,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById(fileInputId);
     const display = document.getElementById(displayId);
 
-    zone.addEventListener('click', () => input.click());
+    if (!zone || !input || !display) return;
+
+    // Create or locate clear button
+    let clearBtn = zone.querySelector('.file-clear-btn');
+    if (!clearBtn) {
+      clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'file-clear-btn';
+      clearBtn.title = 'Remove selected file';
+      clearBtn.innerHTML = '<i class="fas fa-times"></i>';
+      clearBtn.style.cssText = "display: none; background: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 50%; width: 26px; height: 26px; align-items: center; justify-content: center; cursor: pointer; margin-left: 8px; vertical-align: middle; transition: all 0.2s ease;";
+      display.parentNode.insertBefore(clearBtn, display.nextSibling);
+    }
+
+    const resetFileInput = () => {
+      input.value = '';
+      display.innerText = 'No file chosen';
+      display.style.color = '';
+      clearBtn.style.display = 'none';
+    };
+
+    clearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      resetFileInput();
+    });
+
+    zone.addEventListener('click', (e) => {
+      if (e.target.closest('.file-clear-btn')) return;
+      input.click();
+    });
 
     zone.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -213,14 +243,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.dataTransfer.files.length > 0) {
         input.files = e.dataTransfer.files;
         display.innerText = e.dataTransfer.files[0].name;
+        display.style.color = 'var(--secondary)';
+        clearBtn.style.display = 'inline-flex';
       }
     });
 
     input.addEventListener('change', () => {
       if (input.files.length > 0) {
         display.innerText = input.files[0].name;
+        display.style.color = 'var(--secondary)';
+        clearBtn.style.display = 'inline-flex';
       } else {
-        display.innerText = 'No file chosen';
+        resetFileInput();
       }
     });
   }
@@ -229,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('faculty-upload-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fileInput = document.getElementById('faculty-excel-file');
-    if (fileInput.files.length === 0) {
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
       showToast('Select File', 'Please choose an Excel file first', 'warning');
       return;
     }
@@ -244,7 +278,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       showToast('Faculty Uploaded', 'Excel parsed and imported successfully', 'success');
       fileInput.value = '';
-      document.getElementById('faculty-file-name').innerText = 'No file chosen';
+      const display = document.getElementById('faculty-file-name');
+      if (display) {
+        display.innerText = 'No file chosen';
+        display.style.color = '';
+      }
+      const clearBtn = document.querySelector('#faculty-dropzone .file-clear-btn');
+      if (clearBtn) clearBtn.style.display = 'none';
       loadFaculty();
     } catch (error) {
       showToast('Upload Failed', error.message || 'Error parsing Excel sheet', 'error');
@@ -319,6 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const title = document.getElementById('faculty-modal-title');
     const btn = document.getElementById('faculty-modal-btn');
     const mode = document.getElementById('faculty-modal-mode');
+    const origIdInput = document.getElementById('faculty-original-id');
     
     const idInput = document.getElementById('fac-id');
     const nameInput = document.getElementById('fac-name');
@@ -329,19 +370,21 @@ document.addEventListener('DOMContentLoaded', () => {
     idInput.disabled = false;
 
     if (facId) {
-      const fac = facultyList.find(f => f.id === facId);
+      const fac = facultyList.find(f => String(f.id).trim().toLowerCase() === String(facId).trim().toLowerCase());
       if (fac) {
         mode.value = 'edit';
+        if (origIdInput) origIdInput.value = fac.id;
         title.innerText = 'Edit Faculty Details';
         btn.innerText = 'Update Faculty';
         idInput.value = fac.id;
-        idInput.disabled = true; // Can't edit ID
+        idInput.disabled = false;
         nameInput.value = fac.name;
         emailInput.value = fac.email;
         pwdInput.value = fac.password || '';
       }
     } else {
       mode.value = 'add';
+      if (origIdInput) origIdInput.value = '';
       title.innerText = 'Add Faculty';
       btn.innerText = 'Add Faculty';
       pwdInput.value = 'faculty@mits';
@@ -352,6 +395,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.closeFacultyModal = function() {
     document.getElementById('faculty-modal').classList.remove('active');
+    const origIdInput = document.getElementById('faculty-original-id');
+    if (origIdInput) origIdInput.value = '';
   };
 
   // Define editFaculty on window scope so it can be called from onclick
@@ -363,6 +408,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('faculty-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const mode = document.getElementById('faculty-modal-mode').value;
+    const origIdInput = document.getElementById('faculty-original-id');
+    const originalId = origIdInput && origIdInput.value ? origIdInput.value.trim() : null;
     
     const facultyData = {
       id: document.getElementById('fac-id').value.trim(),
@@ -380,14 +427,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         showToast('Faculty Added', 'New faculty account created', 'success');
       } else {
-        await apiRequest(`/adminfaculty/updateFaculty/${facultyData.id}`, {
+        const targetId = originalId || facultyData.id;
+        await apiRequest(`/adminfaculty/updateFaculty/${encodeURIComponent(targetId)}`, {
           method: 'PUT',
           body: facultyData
         });
-        showToast('Faculty Updated', 'Faculty details updated successfully', 'success');
+        showToast('Faculty Updated', 'Faculty details and ID updated successfully', 'success');
       }
       closeFacultyModal();
-      loadFaculty();
+      await loadFaculty();
     } catch (error) {
       showToast('Operation Failed', error.message || 'Could not save faculty details', 'error');
     }

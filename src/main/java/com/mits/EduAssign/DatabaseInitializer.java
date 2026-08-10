@@ -141,15 +141,6 @@ public class DatabaseInitializer implements CommandLineRunner {
             System.err.println("Error resetting faculty passwords: " + e.getMessage());
         }
 
-        // Programmatic one-time cleanup of third year allocation data for testing (keeping preferences)
-        try {
-            jdbcTemplate.execute("DELETE FROM subject_allocation WHERE subject_id IN (SELECT subject_code FROM subject WHERE year = 3)");
-            jdbcTemplate.execute("DELETE FROM section_allocation WHERE subject_id IN (SELECT subject_code FROM subject WHERE year = 3)");
-            jdbcTemplate.execute("DELETE FROM allocation_history WHERE subject_id IN (SELECT subject_code FROM subject WHERE year = 3)");
-            System.out.println("--- Successfully removed all third-year allocation data ---");
-        } catch (Exception e) {
-            System.err.println("Error removing third-year data: " + e.getMessage());
-        }
 
 
         // Print registered users to console
