@@ -20,6 +20,7 @@ import com.mits.EduAssign.Entity.FacultySubjectPreference;
 import com.mits.EduAssign.Entity.SectionAllocation;
 import com.mits.EduAssign.Entity.Subject;
 import com.mits.EduAssign.Entity.SubjectAllocation;
+import com.mits.EduAssign.Entity.SubjectSelectionWindow;
 import com.mits.EduAssign.Repository.AdminRepository;
 import com.mits.EduAssign.Repository.AllocationHistoryRepository;
 import com.mits.EduAssign.Repository.AllocationRepository;
@@ -116,7 +117,50 @@ public class SuperAdminController {
         List<AdminFaculty> faculties = adminRepository.findAll().stream()
                 .filter(u -> !"SUPERADMIN".equalsIgnoreCase(u.getRole()))
                 .collect(Collectors.toList());
-        faculties.sort(new NaturalOrderComparator());
+
+        // Fetch all raw preferences from DB to compute absolute earliest preference submission ID per faculty
+        List<FacultySubjectPreference> rawPrefs = preferenceRepository.findAll();
+        Map<String, Long> facultyEarliestPrefIdMap = new HashMap<>();
+        for (FacultySubjectPreference p : rawPrefs) {
+            if (p.getFacultyId() != null && p.getId() != null) {
+                String fKey = p.getFacultyId().trim().toLowerCase();
+                Long currentMin = facultyEarliestPrefIdMap.get(fKey);
+                if (currentMin == null || p.getId() < currentMin) {
+                    facultyEarliestPrefIdMap.put(fKey, p.getId());
+                }
+            }
+        }
+
+        // Merge in-memory static tracker in SubjectService if available
+        for (Map.Entry<String, Long> entry : com.mits.EduAssign.Service.SubjectService.EARLIEST_YEAR_SUBMISSION_MAP.entrySet()) {
+            String fKey = entry.getKey();
+            if (fKey.contains("_")) {
+                fKey = fKey.substring(fKey.indexOf("_") + 1);
+            }
+            Long currentMin = facultyEarliestPrefIdMap.get(fKey);
+            if (currentMin == null || entry.getValue() < currentMin) {
+                facultyEarliestPrefIdMap.put(fKey, entry.getValue());
+            }
+        }
+
+        // Sort faculties by preference submission order (who submitted preferences earliest comes FIRST)
+        faculties.sort((f1, f2) -> {
+            String k1 = f1.getId().trim().toLowerCase();
+            String k2 = f2.getId().trim().toLowerCase();
+            Long order1 = facultyEarliestPrefIdMap.get(k1);
+            Long order2 = facultyEarliestPrefIdMap.get(k2);
+
+            boolean has1 = (order1 != null);
+            boolean has2 = (order2 != null);
+
+            if (has1 != has2) {
+                return has1 ? -1 : 1;
+            }
+            if (has1 && !order1.equals(order2)) {
+                return Long.compare(order1, order2);
+            }
+            return new NaturalOrderComparator().compare(f1, f2);
+        });
 
         // Fetch all history for this academic year
         List<AllocationHistory> historyList = allocationHistoryRepository.findByAcademicYear(academicYear);
@@ -131,8 +175,8 @@ public class SuperAdminController {
                         (existing, replacing) -> existing
                 ));
 
-        // Fetch all preferences and group them by faculty to find the choice number
-        List<FacultySubjectPreference> allPrefs = preferenceRepository.findAll().stream()
+        // Group preferences by faculty to find choice numbers
+        List<FacultySubjectPreference> allPrefs = rawPrefs.stream()
                 .filter(p -> !p.isMock())
                 .collect(Collectors.toList());
         allPrefs.sort(java.util.Comparator.comparing(FacultySubjectPreference::getId));
@@ -147,12 +191,44 @@ public class SuperAdminController {
         List<SectionAllocation> activeSecAllocs = sectionAllocationRepository.findAll();
         List<SubjectAllocation> activeSubAllocs = allocationRepository.findAll();
 
+        // Determine active allocated study years for the requested academic year
+        java.util.Set<Integer> activeAllocatedYears = new java.util.HashSet<>();
+        for (SectionAllocation sa : activeSecAllocs) {
+            if (sa.isFinalized() && sa.getSubjectId() != null) {
+                Subject s = subjectMap.get(sa.getSubjectId().toLowerCase());
+                if (s != null && s.getAcademicYear() != null && s.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                    activeAllocatedYears.add(s.getYear());
+                }
+            }
+        }
+        for (SubjectAllocation sa : activeSubAllocs) {
+            if (sa.isFinalized() && sa.getSubjectId() != null) {
+                Subject s = subjectMap.get(sa.getSubjectId().toLowerCase());
+                if (s != null && s.getAcademicYear() != null && s.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                    activeAllocatedYears.add(s.getYear());
+                }
+            }
+        }
+
+        if (activeAllocatedYears.isEmpty()) {
+            activeAllocatedYears = windowRepository.findAll().stream()
+                    .filter(w -> w.isActive() && w.getAcademicYear() != null && w.getAcademicYear().equalsIgnoreCase(academicYear))
+                    .map(SubjectSelectionWindow::getYear)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(Collectors.toSet());
+        }
+
         List<Map<String, Object>> report = new ArrayList<>();
         for (AdminFaculty f : faculties) {
             Map<String, Object> facData = new HashMap<>();
             facData.put("facultyId", f.getId());
             facData.put("name", f.getName());
             facData.put("email", f.getEmail());
+            String fKey = f.getId().trim().toLowerCase();
+            Long prefOrder = facultyEarliestPrefIdMap.get(fKey);
+            boolean hasPrefs = (prefOrder != null);
+            facData.put("submissionOrder", hasPrefs ? prefOrder : Long.MAX_VALUE);
+            facData.put("hasPreferences", hasPrefs);
 
             // LinkedHashMap to maintain order and avoid duplicates (Key: subjectId + "_" + sectionName)
             Map<String, Map<String, Object>> allocMap = new LinkedHashMap<>();
@@ -163,10 +239,13 @@ public class SuperAdminController {
             // 1. Add historical allocations
             for (AllocationHistory h : historyList) {
                 if (h.getFacultyId() != null && h.getFacultyId().equalsIgnoreCase(f.getId())) {
+                    Subject sub = h.getSubjectId() != null ? subjectMap.get(h.getSubjectId().toLowerCase()) : null;
+                    if (sub != null && !activeAllocatedYears.isEmpty() && !activeAllocatedYears.contains(sub.getYear())) {
+                        continue;
+                    }
                     Map<String, Object> alloc = new HashMap<>();
                     alloc.put("id", h.getId());
                     alloc.put("subjectId", h.getSubjectId());
-                    Subject sub = h.getSubjectId() != null ? subjectMap.get(h.getSubjectId().toLowerCase()) : null;
                     alloc.put("subjectName", sub != null ? sub.getName() : "Unknown Subject");
                     alloc.put("department", h.getDepartment());
                     alloc.put("semester", h.getSemester());
@@ -193,6 +272,9 @@ public class SuperAdminController {
                 if (sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(f.getId()) && sa.isFinalized()) {
                     Subject sub = sa.getSubjectId() != null ? subjectMap.get(sa.getSubjectId().toLowerCase()) : null;
                     if (sub != null && sub.getAcademicYear() != null && sub.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                        if (!activeAllocatedYears.isEmpty() && !activeAllocatedYears.contains(sub.getYear())) {
+                            continue;
+                        }
                         String key = sa.getSubjectId() + "_" + (sa.getSectionName() != null ? sa.getSectionName() : "N/A");
                         if (!allocMap.containsKey(key)) {
                             Map<String, Object> alloc = new HashMap<>();
@@ -225,6 +307,9 @@ public class SuperAdminController {
                 if (sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(f.getId()) && sa.isFinalized()) {
                     Subject sub = sa.getSubjectId() != null ? subjectMap.get(sa.getSubjectId().toLowerCase()) : null;
                     if (sub != null && sub.getAcademicYear() != null && sub.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                        if (!activeAllocatedYears.isEmpty() && !activeAllocatedYears.contains(sub.getYear())) {
+                            continue;
+                        }
                         boolean alreadyHasSectionOrHistory = false;
                         for (String key : allocMap.keySet()) {
                             if (key.startsWith(sa.getSubjectId() + "_")) {
@@ -300,10 +385,13 @@ public class SuperAdminController {
             // 1. Historical allocations
             for (AllocationHistory h : historyList) {
                 if (h.getFacultyId() != null && h.getFacultyId().equalsIgnoreCase(unknownId)) {
+                    Subject sub = h.getSubjectId() != null ? subjectMap.get(h.getSubjectId().toLowerCase()) : null;
+                    if (sub != null && !activeAllocatedYears.isEmpty() && !activeAllocatedYears.contains(sub.getYear())) {
+                        continue;
+                    }
                     Map<String, Object> alloc = new HashMap<>();
                     alloc.put("id", h.getId());
                     alloc.put("subjectId", h.getSubjectId());
-                    Subject sub = h.getSubjectId() != null ? subjectMap.get(h.getSubjectId().toLowerCase()) : null;
                     alloc.put("subjectName", sub != null ? sub.getName() : "Unknown Subject");
                     alloc.put("department", h.getDepartment());
                     alloc.put("semester", h.getSemester());
@@ -322,6 +410,9 @@ public class SuperAdminController {
                 if (sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(unknownId) && sa.isFinalized()) {
                     Subject sub = sa.getSubjectId() != null ? subjectMap.get(sa.getSubjectId().toLowerCase()) : null;
                     if (sub != null && sub.getAcademicYear() != null && sub.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                        if (!activeAllocatedYears.isEmpty() && !activeAllocatedYears.contains(sub.getYear())) {
+                            continue;
+                        }
                         String key = sa.getSubjectId() + "_" + (sa.getSectionName() != null ? sa.getSectionName() : "N/A");
                         if (!allocMap.containsKey(key)) {
                             Map<String, Object> alloc = new HashMap<>();
@@ -346,6 +437,9 @@ public class SuperAdminController {
                 if (sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(unknownId) && sa.isFinalized()) {
                     Subject sub = sa.getSubjectId() != null ? subjectMap.get(sa.getSubjectId().toLowerCase()) : null;
                     if (sub != null && sub.getAcademicYear() != null && sub.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                        if (!activeAllocatedYears.isEmpty() && !activeAllocatedYears.contains(sub.getYear())) {
+                            continue;
+                        }
                         boolean alreadyHasSectionOrHistory = false;
                         for (String key : allocMap.keySet()) {
                             if (key.startsWith(sa.getSubjectId() + "_")) {
@@ -372,8 +466,11 @@ public class SuperAdminController {
                 }
             }
 
-            facData.put("allocations", new ArrayList<>(allocMap.values()));
-            report.add(facData);
+            List<Map<String, Object>> allocList = new ArrayList<>(allocMap.values());
+            if (!allocList.isEmpty()) {
+                facData.put("allocations", allocList);
+                report.add(facData);
+            }
         }
 
         return ResponseEntity.ok(report);

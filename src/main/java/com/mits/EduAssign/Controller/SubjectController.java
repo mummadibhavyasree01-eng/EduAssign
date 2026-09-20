@@ -27,18 +27,41 @@ public class SubjectController {
     @PostMapping("/add")
     public ResponseEntity<?> addSubject(
             @RequestBody Subject subject) {
+        if (subject == null || subject.getId() == null || subject.getId().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Subject Code is required");
+        }
         String subjectCode = subject.getId().trim();
+        if (subjectCode.contains("_")) {
+            subjectCode = subjectCode.split("_")[0].trim();
+        }
         String acadYear = (subject.getAcademicYear() != null && !subject.getAcademicYear().trim().isEmpty())
                 ? subject.getAcademicYear().trim() : "2026-27";
         String compoundId = subjectCode + "_" + acadYear;
 
-        if (subjectService.viewSubjectById(compoundId) != null) {
+        Subject existingCompound = subjectService.viewSubjectById(compoundId);
+        Subject existingClean = subjectService.viewSubjectById(subjectCode);
+        boolean existsInYear = false;
+        if (existingCompound != null) {
+            existsInYear = true;
+        } else if (existingClean != null) {
+            String existingCleanYear = existingClean.getAcademicYear() != null ? existingClean.getAcademicYear().trim() : "2026-27";
+            if (existingCleanYear.equalsIgnoreCase(acadYear)) {
+                existsInYear = true;
+            }
+        }
+
+        if (existsInYear) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body("Already there is a subject with that subjectcode in the " + acadYear + " academic year");
         }
         subject.setId(compoundId);
-        return ResponseEntity.ok(
-                subjectService.addSubject(subject));
+        try {
+            return ResponseEntity.ok(
+                    subjectService.addSubject(subject));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Database error: " + e.getMessage());
+        }
     }
 
     @GetMapping("/viewAll")

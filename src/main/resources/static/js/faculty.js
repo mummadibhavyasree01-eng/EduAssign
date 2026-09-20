@@ -125,12 +125,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   let originalOrder = [];
   let originalMockOrder = [];
   let selectionWindow = null;
+  let activeWindows = [];
   let currentStep = 1;
   let isSelectionPeriodActive = false;
   let facultyHasMockAllocation = false;
   let allocatedSubjectIds = new Set();
   let isRegularSelectionDisabled = false;
   let isMockSelectionDisabled = false;
+  let isRegularSelectionDisabledPerYear = {};
+  let isMockSelectionDisabledPerYear = {};
+  let subjectPreferenceLimits = {};
 
   // Profile Form update
   document.getElementById('profile-form').addEventListener('submit', async (e) => {
@@ -318,25 +322,30 @@ document.addEventListener('DOMContentLoaded', async () => {
            console.error('Failed to check past mock allocation status:', err);
            return false;
          }),
-         apiRequest(`/faculty/allocations/${currentUser.id}`).catch(() => null)
+         apiRequest(`/faculty/allocations/${currentUser.id}`).catch(() => null),
+         apiRequest('/faculty/preferences/subject-limits').catch(() => ({}))
        ]);
        const allSubjects = res[0];
        const preferences = res[1];
        selectionWindow = res[2];
        facultyHasMockAllocation = res[3];
        const myAllocations = res[4];
+       subjectPreferenceLimits = res[5] || {};
 
       subjects = Array.isArray(allSubjects) ? allSubjects : [];
       facultyPreferences = Array.isArray(preferences) ? preferences : [];
 
-      const activeWindows = Array.isArray(res[2]) ? res[2].filter(w => w.active && [1, 2, 3, 4].includes(w.id)) : (res[2] && res[2].active && [1, 2, 3, 4].includes(res[2].id) ? [res[2]] : []);
+      activeWindows = Array.isArray(res[2]) ? res[2].filter(w => w.active && [1, 2, 3, 4].includes(w.id)) : (res[2] && res[2].active && [1, 2, 3, 4].includes(res[2].id) ? [res[2]] : []);
       selectionWindow = activeWindows[0] || null;
 
       let isAlreadyFullyAllocated = false;
       isRegularSelectionDisabled = false;
       isMockSelectionDisabled = false;
+      isRegularSelectionDisabledPerYear = {};
+      isMockSelectionDisabledPerYear = {};
       allocatedSubjectIds.clear();
-      if (selectionWindow && myAllocations) {
+
+      if (myAllocations) {
         let subAllocList = [];
         if (Array.isArray(myAllocations)) {
           subAllocList = myAllocations;
@@ -357,20 +366,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         const myWindowAllocs = subAllocList.filter(a => windowSubIds.has(a.subjectId.toUpperCase()));
         allocatedSubjectIds = new Set(myWindowAllocs.map(a => a.subjectId.toUpperCase()));
 
-        let regularAllocatedCount = 0;
-        let mockAllocatedCount = 0;
-        subAllocList.forEach(alloc => {
-          const sub = allSubjects.find(s => s.id.toUpperCase() === alloc.subjectId.toUpperCase());
-          if (sub) {
-            if (sub.mock) {
-              mockAllocatedCount++;
-            } else {
-              regularAllocatedCount++;
+        // Calculate limits per year
+        activeWindows.forEach(win => {
+          const y = win.year;
+          let regularAllocatedCount = 0;
+          let mockAllocatedCount = 0;
+          
+          subAllocList.forEach(alloc => {
+            const sub = allSubjects.find(s => s.id.toUpperCase() === alloc.subjectId.toUpperCase());
+            if (sub && Number(sub.year) === Number(y)) {
+              if (sub.mock) {
+                mockAllocatedCount++;
+              } else {
+                regularAllocatedCount++;
+              }
             }
+          });
+
+          const maxSubjectsLimit = win.maxSubjectsAllocated ? Number(win.maxSubjectsAllocated) : 3;
+          let maxRegularAllocatedLimit = maxSubjectsLimit;
+          let maxMockAllocatedLimit = 0;
+          if (maxSubjectsLimit === 3) {
+            maxRegularAllocatedLimit = 2;
+            maxMockAllocatedLimit = 1;
           }
+
+          isRegularSelectionDisabledPerYear[y] = (regularAllocatedCount >= maxRegularAllocatedLimit);
+          isMockSelectionDisabledPerYear[y] = (mockAllocatedCount >= maxMockAllocatedLimit);
         });
 
-        const maxSubjectsLimit = (selectionWindow && selectionWindow.maxSubjectsAllocated) ? Number(selectionWindow.maxSubjectsAllocated) : 3;
+        // Set global fallbacks
+        const currentWin = activeWindows[0] || null;
+        const maxSubjectsLimit = (currentWin && currentWin.maxSubjectsAllocated) ? Number(currentWin.maxSubjectsAllocated) : 3;
         let maxRegularAllocatedLimit = maxSubjectsLimit;
         let maxMockAllocatedLimit = 0;
         if (maxSubjectsLimit === 3) {
@@ -378,18 +405,29 @@ document.addEventListener('DOMContentLoaded', async () => {
           maxMockAllocatedLimit = 1;
         }
 
-        const regularLimitReached = (regularAllocatedCount >= maxRegularAllocatedLimit);
-        const mockLimitReached = (mockAllocatedCount >= maxMockAllocatedLimit);
+        let totalRegularAllocatedCount = 0;
+        let totalMockAllocatedCount = 0;
+        subAllocList.forEach(alloc => {
+          const sub = allSubjects.find(s => s.id.toUpperCase() === alloc.subjectId.toUpperCase());
+          if (sub) {
+            if (sub.mock) {
+              totalMockAllocatedCount++;
+            } else {
+              totalRegularAllocatedCount++;
+            }
+          }
+        });
 
-        isRegularSelectionDisabled = regularLimitReached;
-        isMockSelectionDisabled = mockLimitReached;
+        isRegularSelectionDisabled = (totalRegularAllocatedCount >= maxRegularAllocatedLimit);
+        isMockSelectionDisabled = (totalMockAllocatedCount >= maxMockAllocatedLimit);
 
-        if (subAllocList.length >= maxSubjectsLimit || (regularLimitReached && mockLimitReached)) {
+        if (subAllocList.length >= maxSubjectsLimit || (isRegularSelectionDisabled && isMockSelectionDisabled)) {
           isAlreadyFullyAllocated = true;
         }
       }
 
       if (activeWindows.length > 0) {
+        isAlreadyFullyAllocated = false;
         subjects = subjects.filter(s => {
           return activeWindows.some(win => 
             (win.academicYear == null || (s.academicYear && s.academicYear.toLowerCase() === win.academicYear.toLowerCase())) &&
@@ -416,28 +454,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (prefForm) prefForm.style.display = 'none';
         const searchBox = document.querySelector('.search-box-wrapper');
         if (searchBox) searchBox.style.display = 'none';
-
-        // Show completion message
-        let msgDiv = document.getElementById('fully-allocated-message');
-        if (!msgDiv) {
-          msgDiv = document.createElement('div');
-          msgDiv.id = 'fully-allocated-message';
-          msgDiv.style.padding = '30px';
-          msgDiv.style.textAlign = 'center';
-          msgDiv.style.background = 'rgba(20, 184, 166, 0.05)';
-          msgDiv.style.border = '1px solid var(--primary)';
-          msgDiv.style.borderRadius = 'var(--border-radius-md)';
-          msgDiv.style.marginTop = '10px';
-          msgDiv.innerHTML = `
-            <i class="fas fa-check-circle" style="font-size: 2.5rem; color: var(--primary); margin-bottom: 15px; display: block;"></i>
-            <h4 style="color: var(--text-main); margin-bottom: 10px; font-weight: 600;">Allocations Completed</h4>
-            <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.5;">You have already been allocated your maximum limit of subjects. There is no need to select any subject preferences.</p>
-          `;
-          const selectionCard = document.querySelector('.selection-card');
-          if (selectionCard) selectionCard.appendChild(msgDiv);
-        } else {
-          msgDiv.style.display = 'block';
-        }
       } else {
         // Reset visibility of form and search
         const prefForm = document.getElementById('preferences-form');
@@ -457,20 +473,80 @@ document.addEventListener('DOMContentLoaded', async () => {
       originalOrder = [...selectedOrder];
       originalMockOrder = [...selectedMockOrder];
 
-      if (facultyPreferences.length > 0) {
-        currentStep = 3;
-        prefSelectionSection.style.display = 'none';
-        mockSection.style.display = 'none';
-        previewSection.style.display = 'block';
-        if (searchBoxWrapper) searchBoxWrapper.style.display = 'none';
-        renderPreviewTable();
+      if (isAlreadyFullyAllocated) {
+        // Show completion message with submitted preferences
+        let msgDiv = document.getElementById('fully-allocated-message');
+        if (!msgDiv) {
+          msgDiv = document.createElement('div');
+          msgDiv.id = 'fully-allocated-message';
+          msgDiv.style.padding = '30px';
+          msgDiv.style.textAlign = 'center';
+          msgDiv.style.background = 'rgba(20, 184, 166, 0.05)';
+          msgDiv.style.border = '1px solid var(--primary)';
+          msgDiv.style.borderRadius = 'var(--border-radius-md)';
+          msgDiv.style.marginTop = '10px';
+          const selectionCard = document.querySelector('.selection-card');
+          if (selectionCard) selectionCard.appendChild(msgDiv);
+        }
+        msgDiv.style.display = 'block';
+
+        let prefListHtml = '';
+        if (selectedOrder.length > 0 || selectedMockOrder.length > 0) {
+          prefListHtml = `
+            <div style="margin-top: 20px; border-top: 1px dashed var(--panel-border); padding-top: 20px; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto;">
+              <h5 style="color: var(--text-main); font-weight: 600; margin-bottom: 12px; font-size: 0.95rem; text-align: center;"><i class="fas fa-list-ol"></i> Your Submitted Preferences</h5>
+              <div class="table-responsive" style="max-height: 250px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: var(--border-radius-sm); border: 1px solid var(--panel-border);">
+                <table class="table" style="width: 100%; border-collapse: collapse; margin-bottom: 0;">
+                  <tbody>
+                    ${selectedOrder.map((subId, idx) => {
+                      const sub = subjects.find(s => s.id === subId) || { name: subId };
+                      return `
+                        <tr>
+                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); width: 30px; font-weight: 700; color: var(--secondary); font-size: 0.8rem;">${idx + 1}</td>
+                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); font-size: 0.82rem; color: var(--text-main);">${sub.name} <code style="color: var(--text-muted); font-size: 0.76rem;">(${subId})</code></td>
+                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); text-align: right;"><span class="badge" style="background: rgba(20, 184, 166, 0.1); color: var(--secondary); font-size: 0.72rem; padding: 2px 6px;">Regular</span></td>
+                        </tr>
+                      `;
+                    }).join('')}
+                    ${selectedMockOrder.map(subId => {
+                      const sub = subjects.find(s => s.id === subId) || { name: subId };
+                      return `
+                        <tr>
+                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); width: 30px; font-weight: 700; color: var(--primary); font-size: 0.8rem;">M</td>
+                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); font-size: 0.82rem; color: var(--text-main);">${sub.name} <code style="color: var(--text-muted); font-size: 0.76rem;">(${subId})</code></td>
+                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); text-align: right;"><span class="badge" style="background: rgba(99, 102, 241, 0.1); color: var(--primary); font-size: 0.72rem; padding: 2px 6px;">Mock</span></td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        }
+
+        msgDiv.innerHTML = `
+          <i class="fas fa-check-circle" style="font-size: 2.5rem; color: var(--primary); margin-bottom: 15px; display: block;"></i>
+          <h4 style="color: var(--text-main); margin-bottom: 10px; font-weight: 600;">Allocations Completed</h4>
+          <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.5;">You have already been allocated your maximum limit of subjects. There is no need to select any subject preferences.</p>
+          ${prefListHtml}
+        `;
       } else {
-        currentStep = 1;
-        prefSelectionSection.style.display = 'block';
-        mockSection.style.display = 'none';
-        previewSection.style.display = 'none';
-        if (searchBoxWrapper) searchBoxWrapper.style.display = 'block';
-        renderSubjectPreferencesList(subjects);
+        if (facultyPreferences.length > 0) {
+          currentStep = 3;
+          prefSelectionSection.style.display = 'none';
+          mockSection.style.display = 'none';
+          previewSection.style.display = 'block';
+          if (searchBoxWrapper) searchBoxWrapper.style.display = 'none';
+          renderPreviewTable();
+        } else {
+          currentStep = 1;
+          prefSelectionSection.style.display = 'block';
+          mockSection.style.display = 'none';
+          previewSection.style.display = 'none';
+          if (searchBoxWrapper) searchBoxWrapper.style.display = 'block';
+          renderSubjectPreferencesList(subjects);
+        }
       }
       updateStepIndicators();
       
@@ -577,10 +653,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       const sortedSubs = grouped[y].sort((a, b) => a.id.localeCompare(b.id));
 
       sortedSubs.forEach(sub => {
-        const isAllocated = allocatedSubjectIds.has(sub.id.toUpperCase());
+        const isAllocated = false;
         const isChecked = selectedOrder.includes(sub.id);
-        const isSelDisabled = isRegularSelectionDisabled || isAllocated;
+        const limitInfo = subjectPreferenceLimits[sub.id.toLowerCase()];
+        const isLimitReached = limitInfo && limitInfo.isLimitReached && !isChecked;
         
+        const isRegDisabledForYear = isRegularSelectionDisabledPerYear[sub.year] || false;
+        const isSelDisabled = isRegDisabledForYear || isLimitReached;
+        
+        let limitBadgeHtml = '';
+        if (isLimitReached) {
+          limitBadgeHtml = `<span class="status-badge expired" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold; background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3);"><i class="fas fa-ban"></i> Limit Reached (${limitInfo.count}/${limitInfo.limit})</span>`;
+        } else if (limitInfo && limitInfo.limit) {
+          limitBadgeHtml = `<span class="status-badge info" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: 500; background: rgba(20, 184, 166, 0.1); color: var(--secondary);"><i class="fas fa-users"></i> ${limitInfo.count}/${limitInfo.limit}</span>`;
+        }
+
         const item = document.createElement('div');
         item.className = `subject-item ${isChecked ? 'selected' : ''} ${isSelDisabled ? 'allocated-disabled' : ''}`;
         if (isSelDisabled) {
@@ -593,8 +680,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div class="pref-index-indicator"></div>
           <div class="subject-details">
             <span>${sub.name} <code style="color: var(--text-muted); font-size: 0.82rem; font-weight: normal; margin-left: 6px;">${cleanSubjectCode(sub.id)}</code>
-              ${isAllocated ? '<span class="status-badge expired" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold;"><i class="fas fa-check-double"></i> Allocated</span>' : ''}
-              ${isRegularSelectionDisabled && !isAllocated ? '<span class="status-badge progress" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold;"><i class="fas fa-lock"></i> Regular Completed</span>' : ''}
+              ${limitBadgeHtml}
+              ${isRegDisabledForYear ? '<span class="status-badge progress" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold;"><i class="fas fa-lock"></i> Regular Completed</span>' : ''}
             </span>
             <small>Year ${sub.year} Sem ${sub.sem} • Dept: ${sub.dep} • Regulation: ${sub.regulation}</small>
           </div>
@@ -604,14 +691,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) {
-            if (selectionWindow && selectionWindow.maxRegularPreferences) {
+            if (isLimitReached) {
+              checkbox.checked = false;
+              showToast('Selection Limit Completed', `This subject has reached its selection limit (${limitInfo.count}/${limitInfo.limit} faculty). Please choose another subject.`, 'warning');
+              return;
+            }
+            
+            const winForYear = activeWindows.find(win => Number(win.year) === Number(sub.year)) || selectionWindow;
+            if (winForYear && winForYear.maxRegularPreferences) {
               const sameYearSelectedCount = selectedOrder.filter(id => {
-                const s = subjects.find(x => x.id === id);
+                const s = subjects.find(x => x.id.toUpperCase() === id.toUpperCase());
                 return s && Number(s.year) === Number(sub.year);
               }).length;
-              if (sameYearSelectedCount >= selectionWindow.maxRegularPreferences) {
+              if (sameYearSelectedCount >= winForYear.maxRegularPreferences) {
                 checkbox.checked = false;
-                showToast('Limit Exceeded', `You can select a maximum of ${selectionWindow.maxRegularPreferences} regular preferences for Year ${sub.year}.`, 'warning');
+                showToast('Limit Exceeded', `You can select a maximum of ${winForYear.maxRegularPreferences} regular preferences for Year ${sub.year}.`, 'warning');
                 return;
               }
             }
@@ -625,7 +719,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         item.addEventListener('click', (e) => {
-          if (isSelDisabled) return;
+          if (isSelDisabled) {
+            if (isLimitReached && isSelectionPeriodActive) {
+              showToast('Selection Limit Completed', `This subject has reached its selection limit (${limitInfo.count}/${limitInfo.limit} faculty). Please choose another subject.`, 'warning');
+            }
+            return;
+          }
           if (e.target !== checkbox && !e.target.closest('label') && isSelectionPeriodActive) {
             checkbox.checked = !checkbox.checked;
             checkbox.dispatchEvent(new Event('change'));
@@ -640,6 +739,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function renderMockSubjectList(list) {
+    console.log("Mock limits:", subjectPreferenceLimits);
     const container = document.getElementById('mock-checkboxes-container');
     if (!container) return;
 
@@ -659,9 +759,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     sortedList.forEach(sub => {
-      const isAllocated = allocatedSubjectIds.has(sub.id.toUpperCase());
+      const isAllocated = false;
       const isChecked = selectedMockOrder.includes(sub.id);
-      const isSelDisabled = isMockSelectionDisabled || isAllocated;
+      const limitInfo = subjectPreferenceLimits[sub.id.toLowerCase()];
+      const isLimitReached = limitInfo && limitInfo.isLimitReached && !isChecked;
+      
+      const isMockDisabledForYear = isMockSelectionDisabledPerYear[sub.year] || false;
+      const isSelDisabled = isMockDisabledForYear || isLimitReached;
+
+      let limitBadgeHtml = '';
+      if (isLimitReached) {
+        limitBadgeHtml = `<span class="status-badge expired" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold; background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3);"><i class="fas fa-ban"></i> Limit Reached (${limitInfo.count}/${limitInfo.limit})</span>`;
+      } else if (limitInfo && limitInfo.limit) {
+        limitBadgeHtml = `<span class="status-badge info" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: 500; background: rgba(20, 184, 166, 0.1); color: var(--secondary);"><i class="fas fa-users"></i> ${limitInfo.count}/${limitInfo.limit}</span>`;
+      }
 
       const item = document.createElement('div');
       item.className = `subject-item ${isChecked ? 'selected' : ''} ${isSelDisabled ? 'allocated-disabled' : ''}`;
@@ -675,8 +786,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div class="mock-pref-indicator" style="font-weight: 700; color: var(--primary); font-size: 0.85rem; margin-right: 12px; min-width: 20px; text-align: center;">${isChecked ? 'Mock' : ''}</div>
         <div class="subject-details">
           <span>${sub.name} <code style="color: var(--text-muted); font-size: 0.82rem; font-weight: normal; margin-left: 6px;">${cleanSubjectCode(sub.id)}</code>
-            ${isAllocated ? '<span class="status-badge expired" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold;"><i class="fas fa-check-double"></i> Allocated</span>' : ''}
-            ${isMockSelectionDisabled && !isAllocated ? '<span class="status-badge progress" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold;"><i class="fas fa-lock"></i> Mock Completed</span>' : ''}
+            ${limitBadgeHtml}
+            ${isMockDisabledForYear ? '<span class="status-badge progress" style="font-size: 0.72rem; padding: 2px 6px; margin-left: 8px; font-weight: bold;"><i class="fas fa-lock"></i> Mock Completed</span>' : ''}
           </span>
           <small>Year ${sub.year} Sem ${sub.sem} • Dept: ${sub.dep} • Regulation: ${sub.regulation}</small>
         </div>
@@ -687,14 +798,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       checkbox.addEventListener('change', () => {
         if (checkbox.checked) {
-          if (selectionWindow && selectionWindow.maxMockPreferences) {
+          if (isLimitReached) {
+            checkbox.checked = false;
+            showToast('Selection Limit Completed', `This mock subject has reached its selection limit (${limitInfo.count}/${limitInfo.limit} faculty). Please choose another subject.`, 'warning');
+            return;
+          }
+          const winForYear = activeWindows.find(win => Number(win.year) === Number(sub.year)) || selectionWindow;
+          if (winForYear && winForYear.maxMockPreferences) {
             const sameYearMockSelectedCount = selectedMockOrder.filter(id => {
-              const s = subjects.find(x => x.id === id);
+              const s = subjects.find(x => x.id.toUpperCase() === id.toUpperCase());
               return s && Number(s.year) === Number(sub.year);
             }).length;
-            if (sameYearMockSelectedCount >= selectionWindow.maxMockPreferences) {
+            if (sameYearMockSelectedCount >= winForYear.maxMockPreferences) {
               checkbox.checked = false;
-              showToast('Limit Exceeded', `You can select a maximum of ${selectionWindow.maxMockPreferences} mock preferences for Year ${sub.year}.`, 'warning');
+              showToast('Limit Exceeded', `You can select a maximum of ${winForYear.maxMockPreferences} mock preferences for Year ${sub.year}.`, 'warning');
               return;
             }
           }
@@ -711,7 +828,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       item.addEventListener('click', (e) => {
-        if (isSelDisabled) return;
+        if (isSelDisabled) {
+          if (isLimitReached && isSelectionPeriodActive) {
+            showToast('Selection Limit Completed', `This mock subject has reached its selection limit (${limitInfo.count}/${limitInfo.limit} faculty). Please choose another subject.`, 'warning');
+          }
+          return;
+        }
         if (e.target !== checkbox && !e.target.closest('label') && isSelectionPeriodActive) {
           checkbox.checked = !checkbox.checked;
           checkbox.dispatchEvent(new Event('change'));
@@ -918,7 +1040,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (mockSubmitBtn) {
     mockSubmitBtn.addEventListener('click', () => {
       const hasMockAvailable = subjects.some(s => s.mock === true);
-      if (selectedMockOrder.length === 0 && !facultyHasMockAllocation && hasMockAvailable) {
+      const hasAvailableMock = subjects.some(s => {
+        if (!s.mock) return false;
+        const limitInfo = subjectPreferenceLimits[s.id.toLowerCase()];
+        return !limitInfo || !limitInfo.isLimitReached;
+      });
+      if (selectedMockOrder.length === 0 && !facultyHasMockAllocation && hasMockAvailable && hasAvailableMock) {
         showToast('Mock Required', 'Every faculty must select at least one subject for Mock.', 'warning');
         return;
       }
@@ -955,7 +1082,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const hasMockAvailable = subjects.some(s => s.mock === true);
-    if (selectedMockOrder.length === 0 && !facultyHasMockAllocation && hasMockAvailable) {
+    const hasAvailableMock = subjects.some(s => {
+      if (!s.mock) return false;
+      const limitInfo = subjectPreferenceLimits[s.id.toLowerCase()];
+      return !limitInfo || !limitInfo.isLimitReached;
+    });
+    if (selectedMockOrder.length === 0 && !facultyHasMockAllocation && hasMockAvailable && hasAvailableMock) {
       showToast('Mock Required', 'Every faculty must select at least one subject for Mock.', 'warning');
       return;
     }

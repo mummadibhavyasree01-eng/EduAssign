@@ -50,16 +50,11 @@ public class DatabaseInitializer implements CommandLineRunner {
             // Ignore if column already dropped
         }
 
-        // Programmatic one-time cleanup of orphaned database records referencing deleted faculty IDs
+        // Cleanup orphaned preferences if any
         try {
             jdbcTemplate.execute("DELETE FROM faculty_subject_preference WHERE faculty_id NOT IN (SELECT id FROM admin_faculty)");
-            jdbcTemplate.execute("DELETE FROM subject_allocation WHERE faculty_id NOT IN (SELECT id FROM admin_faculty) AND faculty_id NOT LIKE 'UNKNOWN_%'");
-            jdbcTemplate.execute("DELETE FROM section_allocation WHERE faculty_id NOT IN (SELECT id FROM admin_faculty) AND faculty_id NOT LIKE 'UNKNOWN_%'");
-            jdbcTemplate.execute("DELETE FROM allocation_history WHERE faculty_id NOT IN (SELECT id FROM admin_faculty) AND faculty_id NOT LIKE 'UNKNOWN_%'");
-            jdbcTemplate.execute("DELETE FROM allocation_history WHERE section_name REGEXP '^[0-9]+$'");
-            System.out.println("--- Cleaned up orphaned preferences and allocations referencing deleted/actual faculty IDs and purged corrupt history ---");
         } catch (Exception e) {
-            System.err.println("Error cleaning up orphaned allocations: " + e.getMessage());
+            System.err.println("Error cleaning up preferences: " + e.getMessage());
         }
 
         // Deduplication logic commented out to prevent startup deletion of faculty data

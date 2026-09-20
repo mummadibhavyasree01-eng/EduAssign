@@ -248,13 +248,10 @@ document.addEventListener('DOMContentLoaded', () => {
       populateCustomPrefDropdown();
 
       const academicYearInput = document.getElementById('pref-academic-year-input');
-      const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '';
-
-      if (!academicYearVal) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 15px;">Please enter Academic Year to load selections.</td></tr>`;
-        pendingTbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 15px;">Please enter Academic Year.</td></tr>`;
-        return;
+      if (academicYearInput && !academicYearInput.value) {
+        academicYearInput.value = '2025-26';
       }
+      const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '2025-26';
 
       const [faculty, subjects, allPreferences, sectionAllocs, selectionWindow] = await Promise.all([
         apiRequest('/adminfaculty/viewfaculty'),
@@ -266,20 +263,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const facultyMap = {};
       const facList = Array.isArray(faculty) ? faculty : [];
-      facList.forEach(f => facultyMap[f.id] = f);
+      facList.forEach(f => {
+        if (f.id) {
+          facultyMap[f.id] = f;
+          facultyMap[f.id.toLowerCase()] = f;
+          facultyMap[f.id.toUpperCase()] = f;
+        }
+      });
       
       const subjectsMap = {};
       const subList = Array.isArray(subjects) ? subjects : [];
-      subList.forEach(s => subjectsMap[s.id] = s);
+      subList.forEach(s => {
+        if (s.id) {
+          subjectsMap[s.id] = s;
+          subjectsMap[s.id.toLowerCase()] = s;
+          subjectsMap[s.id.toUpperCase()] = s;
+        }
+      });
 
       window.preferencesData = {
         allPreferences: Array.isArray(allPreferences) ? allPreferences : [],
         facultyMap,
         subjectsMap,
+        subjectsList: subList,
         facultyList: Array.isArray(faculty) ? faculty : [],
         sectionAllocs: Array.isArray(sectionAllocs) ? sectionAllocs : [],
         selectionWindow: selectionWindow || null
       };
+
+      const prefDeptFilter = document.getElementById('pref-dept-filter');
+      const prefYearFilter = document.getElementById('pref-year-filter');
+      const prefSemFilter = document.getElementById('pref-sem-filter');
+
+      if (prefDeptFilter && !prefDeptFilter.value && departments.length > 0) {
+        prefDeptFilter.value = departments[0].code;
+      }
+      if (prefYearFilter && (!prefYearFilter.value || prefYearFilter.value === '')) {
+        prefYearFilter.value = 'ALL';
+        const triggerLabel = document.getElementById('custom-pref-trigger-label');
+        if (triggerLabel) {
+          triggerLabel.innerText = 'All Years - Sem 1';
+          triggerLabel.style.color = 'var(--text-main)';
+        }
+      }
+      if (prefSemFilter && (!prefSemFilter.value || prefSemFilter.value === '')) {
+        prefSemFilter.value = '1';
+      }
 
       renderPreferencesTable();
       renderPendingTable();
@@ -314,7 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
         subDeptFilter.appendChild(opt);
       });
     }
-    if (subYearFilter && subYearFilter.options.length <= 1) {
+    if (subYearFilter) {
+      subYearFilter.innerHTML = '<option value="" disabled selected>Select Year</option><option value="ALL">All Years</option>';
       academicYears.forEach(y => {
         const opt = document.createElement('option');
         opt.value = y.yearNumber;
@@ -323,12 +353,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
     const prefYearFilter = document.getElementById('pref-year-filter');
-    if (prefYearFilter && prefYearFilter.options.length <= 1) {
-      const allOpt = document.createElement('option');
-      allOpt.value = "ALL";
-      allOpt.innerText = "All Years";
-      prefYearFilter.appendChild(allOpt);
-
+    if (prefYearFilter) {
+      prefYearFilter.innerHTML = '<option value="" disabled selected>Select Year</option><option value="ALL">All Years</option>';
       academicYears.forEach(y => {
         const opt = document.createElement('option');
         opt.value = y.yearNumber;
@@ -337,7 +363,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    if (semFilter && semFilter.options.length <= 1) {
+    if (semFilter) {
+      semFilter.innerHTML = '<option value="" disabled selected>Select Semester</option>';
       const sortedSems = [...semesters].sort((a,b) => a.semNumber - b.semNumber);
       sortedSems.forEach(s => {
         const opt = document.createElement('option');
@@ -346,7 +373,8 @@ document.addEventListener('DOMContentLoaded', () => {
         semFilter.appendChild(opt);
       });
     }
-    if (subSemFilter && subSemFilter.options.length <= 1) {
+    if (subSemFilter) {
+      subSemFilter.innerHTML = '<option value="" disabled selected>Select Semester</option><option value="ALL">All Semesters</option>';
       const sortedSems = [...semesters].sort((a,b) => a.semNumber - b.semNumber);
       sortedSems.forEach(s => {
         const opt = document.createElement('option');
@@ -364,9 +392,15 @@ document.addEventListener('DOMContentLoaded', () => {
     menuEl.innerHTML = '';
 
     // Include "All Years" option at the top!
+    const filteredAcademicYears = academicYears.filter(y => {
+      if (!y || y.yearNumber === 'ALL') return false;
+      const name = y.name ? y.name.toLowerCase().trim() : '';
+      return name !== 'all years' && name !== 'all year' && name !== 'allyears';
+    });
+
     const yearOptions = [
       { yearNumber: 'ALL', name: 'All Years' },
-      ...academicYears
+      ...filteredAcademicYears
     ];
 
     yearOptions.forEach(y => {
@@ -414,9 +448,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (arrow) arrow.style.transform = '';
         item.style.background = '';
       };
-      
+
       item.addEventListener('mouseenter', showSubmenu);
-      item.addEventListener('mouseleave', hideSubmenu);
       
       item.addEventListener('click', (e) => {
         if (e.target.closest('.sem-opt-btn')) return;
@@ -455,11 +488,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const semSelect = document.getElementById('pref-sem-filter');
         if (yearSelect) {
           yearSelect.value = yearVal;
-          yearSelect.dispatchEvent(new Event('change'));
         }
         if (semSelect) {
           semSelect.value = semVal;
-          semSelect.dispatchEvent(new Event('change'));
         }
         
         // Update trigger button text
@@ -477,6 +508,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Hide dropdown
         const dropdownMenu = document.getElementById('custom-pref-year-menu');
         if (dropdownMenu) dropdownMenu.style.display = 'none';
+
+        handleFilterChange();
       });
     });
   }
@@ -486,7 +519,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!menuEl) return;
     
     menuEl.innerHTML = '';
-    academicYears.forEach(y => {
+
+    // Include "All Years" option at the top!
+    const filteredAcademicYears = academicYears.filter(y => {
+      if (!y || y.yearNumber === 'ALL') return false;
+      const name = y.name ? y.name.toLowerCase().trim() : '';
+      return name !== 'all years' && name !== 'all year' && name !== 'allyears';
+    });
+
+    const yearOptions = [
+      { yearNumber: 'ALL', name: 'All Years' },
+      ...filteredAcademicYears
+    ];
+
+    yearOptions.forEach(y => {
       const item = document.createElement('div');
       item.className = 'custom-dept-item';
       item.style.position = 'relative';
@@ -499,15 +545,18 @@ document.addEventListener('DOMContentLoaded', () => {
       item.style.color = 'var(--text-main)';
       item.style.transition = 'all 0.2s ease';
       
+      const isAll = y.yearNumber === 'ALL';
+      const icon = isAll ? '<i class="fas fa-layer-group" style="font-size: 0.8rem; color: var(--secondary); margin-right: 6px;"></i>' : '';
+
       item.innerHTML = `
         <div class="dept-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; pointer-events: none;">
-          <span>${y.name}</span>
+          <span style="${isAll ? 'font-weight: 600; color: var(--secondary);' : ''}">${icon}${y.name}</span>
           <i class="fas fa-chevron-down" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease;"></i>
         </div>
         <div class="custom-sem-submenu" style="display: none; flex-direction: column; gap: 4px; margin-top: 8px; width: 100%; padding-left: 12px; box-sizing: border-box;">
           ${semesters.map(s => `
             <button type="button" class="sem-opt-btn" data-year="${y.yearNumber}" data-sem="${s.semNumber}" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border); border-radius: var(--border-radius-sm); color: var(--text-main); padding: 6px 12px; font-size: 0.82rem; text-align: left; width: 100%; cursor: pointer; transition: all 0.2s ease;">
-              ${s.name}
+              ${y.yearNumber === 'ALL' ? 'All Years - ' : ''}${s.name}
             </button>
           `).join('')}
         </div>
@@ -528,19 +577,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (arrow) arrow.style.transform = '';
         item.style.background = '';
       };
-      
+
       item.addEventListener('mouseenter', showSubmenu);
-      item.addEventListener('mouseleave', hideSubmenu);
       
       item.addEventListener('click', (e) => {
         if (e.target.closest('.sem-opt-btn')) return;
-        const submenu = item.querySelector('.custom-sem-submenu');
-        const isVisible = submenu && submenu.style.display === 'flex';
-        if (isVisible) {
-          hideSubmenu();
-        } else {
-          showSubmenu();
+        const yearVal = y.yearNumber;
+        const semVal = 'ALL';
+        
+        const yearSelect = document.getElementById('sub-year-filter');
+        const semSelect = document.getElementById('sub-sem-filter');
+        if (yearSelect) {
+          yearSelect.value = yearVal;
+          yearSelect.dispatchEvent(new Event('change'));
         }
+        if (semSelect) {
+          semSelect.value = semVal;
+          semSelect.dispatchEvent(new Event('change'));
+        }
+        
+        const triggerLabel = document.getElementById('custom-sub-trigger-label');
+        if (triggerLabel) {
+          triggerLabel.innerText = yearVal === 'ALL' ? 'All Years' : `${y.name} - All Semesters`;
+          triggerLabel.style.color = 'var(--text-main)';
+        }
+        
+        const dropdownMenu = document.getElementById('custom-sub-year-menu');
+        if (dropdownMenu) dropdownMenu.style.display = 'none';
       });
       
       menuEl.appendChild(item);
@@ -578,7 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Update trigger button text
         const yearObj = academicYears.find(y => String(y.yearNumber) === String(yearVal));
-        const yearName = yearObj ? yearObj.name : `${yearVal} Year`;
+        const yearName = yearVal === 'ALL' ? 'All Years' : (yearObj ? yearObj.name : `${yearVal} Year`);
         const triggerLabel = document.getElementById('custom-sub-trigger-label');
         if (triggerLabel) {
           triggerLabel.innerText = `${yearName} - Sem ${semVal}`;
@@ -611,28 +674,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let filtered = data.allPreferences;
 
-    // Filter out orphaned preferences where faculty or subject no longer exists
-    filtered = filtered.filter(p => data.facultyMap[p.facultyId] && data.subjectsMap[p.subjectId]);
+    // Filter out orphaned preferences where faculty no longer exists (but keep subjects even if not in subjectsMap)
+    filtered = filtered.filter(p => {
+      if (!p.facultyId || !p.subjectId) return false;
+      const fId = p.facultyId.toLowerCase();
+      return !!data.facultyMap[fId];
+    });
 
     // Apply optional filters
     const yearFilterEl = document.getElementById('pref-year-filter');
     const yearVal = yearFilterEl ? yearFilterEl.value : '';
 
+    const getSubjectOrFallback = (subId) => {
+      if (!subId) return null;
+      const sId = subId.toLowerCase();
+      if (data.subjectsMap[sId]) return data.subjectsMap[sId];
+      
+      // Try to find a subject that starts with sId + "_" (fallback for prefix mapping)
+      const prefix = sId + "_";
+      const matchedKey = Object.keys(data.subjectsMap).find(key => key.startsWith(prefix));
+      if (matchedKey) return data.subjectsMap[matchedKey];
+      
+      let name = subId;
+      let code = subId;
+      let acadYear = '';
+      if (subId.includes('_')) {
+        const parts = subId.split('_');
+        code = parts[0];
+        acadYear = parts[1];
+        name = parts[0] + " (Deleted/Imported)";
+      }
+      return {
+        id: subId,
+        name: name,
+        dep: deptVal || 'N/A',
+        sem: semVal ? Number(semVal) : 1,
+        year: yearVal && yearVal !== 'ALL' ? Number(yearVal) : 1,
+        academicYear: acadYear
+      };
+    };
+
     if (deptVal) {
       filtered = filtered.filter(p => {
-        const sub = data.subjectsMap[p.subjectId];
+        const sub = getSubjectOrFallback(p.subjectId);
         return sub && getSubjectDeptCode(sub) === deptVal.toUpperCase();
       });
     }
     if (semVal) {
       filtered = filtered.filter(p => {
-        const sub = data.subjectsMap[p.subjectId];
+        const sub = getSubjectOrFallback(p.subjectId);
         return sub && Number(sub.sem) === Number(semVal);
       });
     }
     if (yearVal && yearVal !== 'ALL') {
       filtered = filtered.filter(p => {
-        const sub = data.subjectsMap[p.subjectId];
+        const sub = getSubjectOrFallback(p.subjectId);
         return sub && Number(sub.year) === Number(yearVal);
       });
     }
@@ -645,14 +741,13 @@ document.addEventListener('DOMContentLoaded', () => {
     filtered.sort((a, b) => Number(a.id) - Number(b.id));
 
     filtered.forEach(p => {
-      if (!grouped[p.facultyId]) {
-        grouped[p.facultyId] = [];
-        facultyOrder.push(p.facultyId);
+      const fId = p.facultyId.toLowerCase();
+      if (!grouped[fId]) {
+        grouped[fId] = [];
+        facultyOrder.push(fId);
       }
-      grouped[p.facultyId].push(p);
+      grouped[fId].push(p);
     });
-
-    
 
     if (facultyOrder.length === 0) {
       tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No preferences found matching criteria.</td></tr>`;
@@ -660,12 +755,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     tbody.innerHTML = '';
-    facultyOrder.forEach(facId => {
-      const fac = data.facultyMap[facId] || { name: 'Unknown Faculty' };
-      const prefsList = grouped[facId];
+    facultyOrder.forEach(fId => {
+      const fac = data.facultyMap[fId] || { name: 'Unknown Faculty' };
+      const prefsList = grouped[fId];
       
       const depts = [...new Set(prefsList.map(p => {
-        const sub = data.subjectsMap[p.subjectId];
+        const sub = getSubjectOrFallback(p.subjectId);
         return sub ? getSubjectDeptCode(sub) : '';
       }).filter(Boolean))].join(', ');
 
@@ -678,7 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const mockPrefs = prefsList.filter(p => p.mock === true);
 
       normalPrefs.forEach((p, index) => {
-        const sub = data.subjectsMap[p.subjectId];
+        const sub = getSubjectOrFallback(p.subjectId);
         if (sub) {
           const yr = sub.year;
           if (!yearGroups[yr]) {
@@ -693,7 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       mockPrefs.forEach(p => {
-        const sub = data.subjectsMap[p.subjectId];
+        const sub = getSubjectOrFallback(p.subjectId);
         if (sub) {
           const yr = sub.year;
           if (!yearGroups[yr]) {
@@ -752,7 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
       prefHtml += '</div>';
 
       tr.innerHTML = `
-        <td><strong>${facId}</strong></td>
+        <td><strong>${fId}</strong></td>
         <td>${fac.name}</td>
         <td><span class="badge badge-admin">${depts || 'N/A'}</span></td>
         <td>${prefHtml}</td>
@@ -780,7 +875,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const data = window.preferencesData;
     if (!data || !data.facultyList) return;
 
-    const allSubjects = Object.values(data.subjectsMap);
+    let allSubjects = [];
+    if (data.subjectsList) {
+      allSubjects = data.subjectsList;
+    } else if (data.subjectsMap) {
+      const seenIds = new Set();
+      Object.values(data.subjectsMap).forEach(s => {
+        if (s && s.id && !seenIds.has(s.id.toLowerCase())) {
+          allSubjects.push(s);
+          seenIds.add(s.id.toLowerCase());
+        }
+      });
+    }
 
     // Filter subjects by selected criteria
     const yearFilterEl = document.getElementById('pref-year-filter');
@@ -800,13 +906,13 @@ document.addEventListener('DOMContentLoaded', () => {
       matchingSubjects = matchingSubjects.filter(s => Number(s.year) === Number(yearVal));
     }
 
-    const matchingSubjectIds = new Set(matchingSubjects.map(s => s.id));
+    const matchingSubjectIds = new Set(matchingSubjects.map(s => s.id.toLowerCase()));
 
     // Find which faculty have submitted preferences for these filtered subjects
     const submittedFacultyIds = new Set();
     data.allPreferences.forEach(p => {
-      if (matchingSubjectIds.has(p.subjectId)) {
-        submittedFacultyIds.add(p.facultyId);
+      if (p.subjectId && matchingSubjectIds.has(p.subjectId.toLowerCase())) {
+        submittedFacultyIds.add(p.facultyId.toLowerCase());
       }
     });
 
@@ -819,11 +925,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const pendingFaculty = (matchingSubjects.length === 0) 
       ? [] 
       : data.facultyList.filter(f => {
-          const hasPrefs = submittedFacultyIds.has(f.id);
+          if (!f.id) return false;
+          const hasPrefs = submittedFacultyIds.has(f.id.toLowerCase());
           if (hasPrefs) return false;
 
           const facAllocs = data.sectionAllocs.filter(sa => {
-            if (!sa.facultyId || sa.facultyId.toUpperCase() !== f.id.toUpperCase()) return false;
+            if (!sa.facultyId || sa.facultyId.toLowerCase() !== f.id.toLowerCase()) return false;
             const sub = data.subjectsMap[sa.subjectId.toLowerCase()];
             return sub && sub.academicYear && sub.academicYear.toLowerCase() === academicYearVal.toLowerCase();
           });
@@ -887,6 +994,31 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       populateFilterDropdowns();
       populateCustomSubDropdown();
+
+      // Pre-fill filters if they are empty
+      const subDeptFilter = document.getElementById('sub-dept-filter');
+      const subYearFilter = document.getElementById('sub-year-filter');
+      const subSemFilter = document.getElementById('sub-sem-filter');
+      const subAcadYearFilter = document.getElementById('sub-academic-year-filter');
+
+      if (subDeptFilter && !subDeptFilter.value && departments.length > 0) {
+        subDeptFilter.value = departments[0].code;
+      }
+      if (subYearFilter && (!subYearFilter.value || subYearFilter.value === '')) {
+        subYearFilter.value = 'ALL';
+        const triggerLabel = document.getElementById('custom-sub-trigger-label');
+        if (triggerLabel) {
+          triggerLabel.innerText = 'All Years - Sem 1';
+          triggerLabel.style.color = 'var(--text-main)';
+        }
+      }
+      if (subSemFilter && (!subSemFilter.value || subSemFilter.value === '')) {
+        subSemFilter.value = '1';
+      }
+      if (subAcadYearFilter && !subAcadYearFilter.value) {
+        subAcadYearFilter.value = '2025-26';
+      }
+
       renderSubjectTable(subjectList);
     } catch (error) {
       showToast('Load Error', 'Could not fetch subjects', 'error');
@@ -932,10 +1064,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return isSubMock === isTargetMock;
     });
 
+    const yearValUpper = yearVal ? yearVal.toString().toUpperCase() : '';
+    const semValUpper = semVal ? semVal.toString().toUpperCase() : '';
+
     filteredList = filteredList.filter(s => 
       getSubjectDeptCode(s) === deptVal.toUpperCase() &&
-      Number(s.year) === Number(yearVal) &&
-      Number(s.sem) === Number(semVal) &&
+      (yearValUpper === 'ALL' || Number(s.year) === Number(yearVal)) &&
+      (semValUpper === 'ALL' || Number(s.sem) === Number(semVal)) &&
       s.academicYear && s.academicYear.toLowerCase().includes(acadYearVal.toLowerCase())
     );
 
@@ -982,7 +1117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         grouped[y][s].forEach(sub => {
           const tr = document.createElement('tr');
           tr.innerHTML = `
-            <td><strong>${sub.id}</strong></td>
+            <td><strong>${cleanSubjectCode(sub.id)}</strong></td>
             <td>${sub.name}</td>
             <td>Year ${sub.year}</td>
             <td>Sem ${sub.sem}</td>
@@ -1004,10 +1139,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleSubjectFilterChange() {
     const q = document.getElementById('subject-search').value.toLowerCase().trim();
     const filtered = subjectList.filter(s => 
-      s.id.toLowerCase().includes(q) || 
-      s.name.toLowerCase().includes(q) || 
-      s.dep.toLowerCase().includes(q) ||
-      s.regulation.toLowerCase().includes(q)
+      (s.id && s.id.toLowerCase().includes(q)) || 
+      (s.name && s.name.toLowerCase().includes(q)) || 
+      (s.dep && s.dep.toLowerCase().includes(q)) ||
+      (s.regulation && s.regulation.toLowerCase().includes(q))
     );
     renderSubjectTable(filtered);
   }
@@ -1055,7 +1190,7 @@ document.addEventListener('DOMContentLoaded', () => {
         oldIdInput.value = sub.id;
         title.innerText = 'Edit Subject';
         btn.innerText = 'Update Subject';
-        idInput.value = sub.id;
+        idInput.value = cleanSubjectCode(sub.id);
         idInput.disabled = false; // Code is editable now!
         nameInput.value = sub.name;
         deptSelect.value = sub.dep;
@@ -1684,6 +1819,14 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         const hasWin = activeWindows.some(w => w.year === val);
         cb.checked = hasWin;
       });
+
+      const allocYearCheckboxes = document.querySelectorAll('.allocate-year-checkbox');
+      if (allocYearCheckboxes.length > 0 && activeWindows.length > 0) {
+        allocYearCheckboxes.forEach(cb => {
+          const val = parseInt(cb.value);
+          cb.checked = activeWindows.some(w => w.year === val);
+        });
+      }
 
       selectionWindow = activeWindows[0] || (Array.isArray(allWindows) ? allWindows[0] : allWindows) || null;
 
@@ -3055,9 +3198,19 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
           ...fac,
           allocations: filteredAllocations
         };
-      }).filter(fac => fac.allocations.length > 0 || fac.isUnknown !== true);
+      }).filter(fac => fac.allocations.length > 0 || fac.hasPreferences === true || fac.isUnknown === true);
 
-      reportData.sort((a, b) => (a.facultyId || '').localeCompare(b.facultyId || '', 'en', { numeric: true, sensitivity: 'base' }));
+      reportData.sort((a, b) => {
+        const isUnknownA = a.isUnknown === true;
+        const isUnknownB = b.isUnknown === true;
+        if (isUnknownA !== isUnknownB) return isUnknownA ? 1 : -1;
+
+        const orderA = a.submissionOrder != null ? a.submissionOrder : Number.MAX_SAFE_INTEGER;
+        const orderB = b.submissionOrder != null ? b.submissionOrder : Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+
+        return (a.facultyId || '').localeCompare(b.facultyId || '', 'en', { numeric: true, sensitivity: 'base' });
+      });
 
       renderReportTable(reportData);
       await renderReportPendingSections();
@@ -3204,7 +3357,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         deleteBtn.className = "btn btn-danger btn-sm";
         deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
         deleteBtn.style.cssText = "height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; background: #EF4444; border: none; color: #fff; cursor: pointer; border-radius: var(--border-radius-sm);";
-        deleteBtn.onclick = () => deleteFacultyAllocationFromModal(a.id, facultyId, facultyName);
+        deleteBtn.onclick = () => deleteFacultyAllocationFromModal(a.subjectId, a.sectionName, facultyId, facultyName, a.id);
 
         actionArea.appendChild(reassignBtn);
         actionArea.appendChild(deleteBtn);
@@ -3231,7 +3384,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
         <h4 style="color: var(--secondary); font-size: 0.95rem; margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px;"><i class="fas fa-plus-circle"></i> Add Subject Allocation</h4>
         <div style="display: flex; gap: 8px; align-items: center;">
           <select id="modal-add-subject-select" class="form-control" style="height: 38px; font-size: 0.85rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); color: var(--text-main); border-radius: var(--border-radius-md); padding: 4px 8px; flex: 1;">
-            <option value="" disabled selected>Select from Unknown Faculty or Pending allocations...</option>
+            <option value="" disabled selected>Loading available subjects and sections...</option>
           </select>
           <button id="modal-add-subject-btn" class="btn btn-primary" style="height: 38px; padding: 0 16px;">Add</button>
         </div>
@@ -3278,7 +3431,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
 
         // Dropdown options
         const selectEl = document.getElementById('modal-add-subject-select');
-        selectEl.innerHTML = '<option value="" disabled selected>Select from Unknown Faculty or Pending allocations...</option>';
+        selectEl.innerHTML = '<option value="" disabled selected>Select an allocation to add...</option>';
         const addBtnEl = document.getElementById('modal-add-subject-btn');
         if (addBtnEl) addBtnEl.disabled = false;
 
@@ -3299,51 +3452,116 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
           }
         });
 
-        // Gather pending sections
-        const activeFacultyIds = new Set(Array.isArray(faculties) ? faculties.map(f => f.id.toLowerCase()) : []);
+        // Gather pending / unallocated sections
+        const allocatedKeys = new Set();
+        (rawReportData || []).forEach(f => {
+          (f.allocations || []).forEach(a => {
+            if (a.subjectId && a.sectionName) {
+              allocatedKeys.add(`${a.subjectId.toLowerCase()}_${a.sectionName.toUpperCase()}`);
+            }
+          });
+        });
+        (allSecAllocs || []).forEach(a => {
+          if (a.subjectId && a.sectionName) {
+            allocatedKeys.add(`${a.subjectId.toLowerCase()}_${a.sectionName.toUpperCase()}`);
+          }
+        });
+
         const pendingSections = [];
+        const availableSections = [];
+
         activeSubjects.forEach(sub => {
           const subSections = deptSections.filter(sec => Number(sec.yearNumber) === Number(sub.year));
-          subSections.forEach(sec => {
-            const isAllocated = allSecAllocs.some(alloc => 
-              alloc.subjectId && alloc.subjectId.toLowerCase() === sub.id.toLowerCase() &&
-              alloc.sectionName && alloc.sectionName.toUpperCase() === sec.sectionName.toUpperCase() &&
-              alloc.facultyId && (alloc.facultyId.toUpperCase().startsWith("UNKNOWN_") || activeFacultyIds.has(alloc.facultyId.toLowerCase()))
-            );
-            if (!isAllocated) {
+          if (subSections.length > 0) {
+            subSections.forEach(sec => {
+              const key = `${sub.id.toLowerCase()}_${sec.sectionName.toUpperCase()}`;
+              if (!allocatedKeys.has(key)) {
+                pendingSections.push({
+                  subjectId: sub.id,
+                  subjectName: sub.name,
+                  sectionName: sec.sectionName,
+                  year: sub.year,
+                  sem: sub.sem
+                });
+              } else {
+                availableSections.push({
+                  subjectId: sub.id,
+                  subjectName: sub.name,
+                  sectionName: sec.sectionName,
+                  year: sub.year,
+                  sem: sub.sem
+                });
+              }
+            });
+          } else {
+            // Default section A
+            const key = `${sub.id.toLowerCase()}_A`;
+            if (!allocatedKeys.has(key)) {
               pendingSections.push({
                 subjectId: sub.id,
                 subjectName: sub.name,
-                sectionName: sec.sectionName,
+                sectionName: 'A',
                 year: sub.year,
                 sem: sub.sem
               });
             }
-          });
+          }
         });
 
-        // Populate dropdown options (Unknown allocations + Pending sections)
-        if (unknownAllocs.length === 0 && pendingSections.length === 0) {
-          const opt = document.createElement('option');
-          opt.text = "No allocations or pending sections available";
-          opt.disabled = true;
-          selectEl.appendChild(opt);
-          if (addBtnEl) addBtnEl.disabled = true;
-        } else {
-          // Unknown allocations first
-          unknownAllocs.forEach(alloc => {
-            const opt = document.createElement('option');
-            opt.value = `${alloc.subjectId}|${alloc.sectionName}|${alloc.unknownFacultyId}`;
-            opt.text = `${cleanSubjectName(alloc.subjectName)} (Year ${alloc.year} - Sec ${alloc.sectionName}) - from ${alloc.unknownFacultyId}`;
-            selectEl.appendChild(opt);
-          });
-          // Pending sections next
+        let addedOptionCount = 0;
+
+        // Group 1: Pending Unallocated Sections
+        if (pendingSections.length > 0) {
+          const grp = document.createElement('optgroup');
+          grp.label = "─── Unallocated / Pending Sections ───";
           pendingSections.forEach(ps => {
             const opt = document.createElement('option');
             opt.value = `${ps.subjectId}|${ps.sectionName}|PENDING`;
             opt.text = `${cleanSubjectName(ps.subjectName)} (Year ${ps.year} - Sec ${ps.sectionName}) - Pending`;
-            selectEl.appendChild(opt);
+            grp.appendChild(opt);
+            addedOptionCount++;
           });
+          selectEl.appendChild(grp);
+        }
+
+        // Group 2: Unknown Faculty allocations
+        if (unknownAllocs.length > 0) {
+          const grp = document.createElement('optgroup');
+          grp.label = "─── From Unknown Faculty ───";
+          unknownAllocs.forEach(alloc => {
+            const opt = document.createElement('option');
+            opt.value = `${alloc.subjectId}|${alloc.sectionName}|${alloc.unknownFacultyId}`;
+            opt.text = `${cleanSubjectName(alloc.subjectName)} (Year ${alloc.year} - Sec ${alloc.sectionName}) - from ${alloc.unknownFacultyId}`;
+            grp.appendChild(opt);
+            addedOptionCount++;
+          });
+          selectEl.appendChild(grp);
+        }
+
+        // Group 3: All Available Curriculum Subjects
+        if (activeSubjects.length > 0) {
+          const grp = document.createElement('optgroup');
+          grp.label = "─── All Active Subjects ───";
+          activeSubjects.forEach(sub => {
+            const subSections = deptSections.filter(sec => Number(sec.yearNumber) === Number(sub.year));
+            const secNames = subSections.length > 0 ? subSections.map(s => s.sectionName) : ['A'];
+            secNames.forEach(sName => {
+              const opt = document.createElement('option');
+              opt.value = `${sub.id}|${sName}|DIRECT`;
+              opt.text = `${cleanSubjectName(sub.name)} (Year ${sub.year} - Sec ${sName})`;
+              grp.appendChild(opt);
+              addedOptionCount++;
+            });
+          });
+          selectEl.appendChild(grp);
+        }
+
+        if (addedOptionCount === 0) {
+          const opt = document.createElement('option');
+          opt.text = "No subjects available to add";
+          opt.disabled = true;
+          selectEl.appendChild(opt);
+          if (addBtnEl) addBtnEl.disabled = true;
         }
 
         // Dropdown actions
@@ -3382,13 +3600,14 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
     if (warningArea) warningArea.style.display = 'none';
 
     try {
-      if (fromFacultyId === 'PENDING') {
+      if (fromFacultyId === 'PENDING' || fromFacultyId === 'DIRECT') {
         await apiRequest(`/adminfaculty/allocate-section?ignoreConstraints=${ignoreConstraints}`, {
           method: 'POST',
           body: {
             subjectId: subjectId,
             sectionName: sectionName,
-            facultyId: toFacultyId
+            facultyId: toFacultyId,
+            finalized: true
           }
         });
       } else {
@@ -3426,18 +3645,20 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
     }
   }
 
-  async function deleteFacultyAllocationFromModal(id, facultyId, facultyName) {
-    if (!id) {
-      showToast('Error', 'Allocation ID not found', 'error');
-      return;
-    }
+  async function deleteFacultyAllocationFromModal(subjectId, sectionName, facultyId, facultyName, id) {
     showConfirm(
       'Delete Allocation',
       'Are you sure you want to delete this allocation? This section will become pending/unallocated.',
       async () => {
         try {
-          await apiRequest(`/adminfaculty/delete-section-allocation/${id}`, {
-            method: 'DELETE'
+          const params = new URLSearchParams();
+          if (subjectId) params.append('subjectId', subjectId);
+          if (sectionName) params.append('sectionName', sectionName);
+          if (facultyId) params.append('facultyId', facultyId);
+          if (id) params.append('id', id);
+
+          await apiRequest(`/adminfaculty/delete-allocation-by-details?${params.toString()}`, {
+            method: 'POST'
           });
           showToast('Success', 'Allocation deleted successfully', 'success');
           await loadReportData();
@@ -4133,28 +4354,60 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       return;
     }
 
-    // Filter out orphaned preferences where faculty or subject no longer exists
-    let validPrefs = data.allPreferences.filter(p => data.facultyMap[p.facultyId] && data.subjectsMap[p.subjectId]);
+    // Filter out orphaned preferences where faculty no longer exists (but keep subjects even if not in subjectsMap)
+    let validPrefs = data.allPreferences.filter(p => {
+      const fId = p.facultyId.toLowerCase();
+      return !!data.facultyMap[fId];
+    });
 
     const deptVal = document.getElementById('pref-dept-filter') ? document.getElementById('pref-dept-filter').value : '';
     const semVal = document.getElementById('pref-sem-filter') ? document.getElementById('pref-sem-filter').value : '';
     const yearVal = document.getElementById('pref-year-filter') ? document.getElementById('pref-year-filter').value : '';
 
+    const getSubjectOrFallback = (subId) => {
+      if (!subId) return null;
+      const sId = subId.toLowerCase();
+      if (data.subjectsMap[sId]) return data.subjectsMap[sId];
+      
+      // Try to find a subject that starts with sId + "_" (fallback for prefix mapping)
+      const prefix = sId + "_";
+      const matchedKey = Object.keys(data.subjectsMap).find(key => key.startsWith(prefix));
+      if (matchedKey) return data.subjectsMap[matchedKey];
+      
+      let name = subId;
+      let code = subId;
+      let acadYear = '';
+      if (subId.includes('_')) {
+        const parts = subId.split('_');
+        code = parts[0];
+        acadYear = parts[1];
+        name = parts[0] + " (Deleted/Imported)";
+      }
+      return {
+        id: subId,
+        name: name,
+        dep: deptVal || 'N/A',
+        sem: semVal ? Number(semVal) : 1,
+        year: yearVal && yearVal !== 'ALL' ? Number(yearVal) : 1,
+        academicYear: acadYear
+      };
+    };
+
     if (deptVal) {
       validPrefs = validPrefs.filter(p => {
-        const sub = data.subjectsMap[p.subjectId];
+        const sub = getSubjectOrFallback(p.subjectId);
         return sub && getSubjectDeptCode(sub) === deptVal.toUpperCase();
       });
     }
     if (semVal) {
       validPrefs = validPrefs.filter(p => {
-        const sub = data.subjectsMap[p.subjectId];
+        const sub = getSubjectOrFallback(p.subjectId);
         return sub && Number(sub.sem) === Number(semVal);
       });
     }
     if (yearVal && yearVal !== 'ALL') {
       validPrefs = validPrefs.filter(p => {
-        const sub = data.subjectsMap[p.subjectId];
+        const sub = getSubjectOrFallback(p.subjectId);
         return sub && Number(sub.year) === Number(yearVal);
       });
     }
@@ -4214,7 +4467,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       const prefsList = grouped[facId] || [];
       
       const depts = [...new Set(prefsList.map(p => {
-        const sub = data.subjectsMap[p.subjectId];
+        const sub = getSubjectOrFallback(p.subjectId);
         return sub ? getSubjectDeptCode(sub) : '';
       }).filter(Boolean))].join('; ');
 
@@ -4227,7 +4480,7 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       for (let i = 0; i < maxPrefsCount; i++) {
         if (i < prefsList.length) {
           const p = prefsList[i];
-          const sub = data.subjectsMap[p.subjectId];
+          const sub = getSubjectOrFallback(p.subjectId);
           if (sub) {
             tableHtml += `<td>${sub.name} (${cleanSubjectCode(sub.id)})</td>`;
           } else {
@@ -4351,6 +4604,30 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
       calculateAllocationStats();
     } catch (error) {
       showToast('Swap Failed', error.message || 'Could not swap allocations.', 'error');
+    }
+  };
+
+  window.clearAllPreferencesAdmin = async function() {
+    const academicYearInput = document.getElementById('pref-academic-year-input');
+    const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '';
+
+    if (!academicYearVal) {
+      showToast('Error', 'Please enter an Academic Year to clear preferences.', 'error');
+      return;
+    }
+
+    if (!confirm(`Are you absolutely sure you want to clear/delete ALL faculty preferences for the academic year ${academicYearVal}? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/faculty/preferences/clear-by-year?academicYear=${encodeURIComponent(academicYearVal)}`, {
+        method: 'DELETE'
+      });
+      showToast('Success', `All faculty preferences for ${academicYearVal} have been cleared.`, 'success');
+      loadFacultySelections();
+    } catch (error) {
+      showToast('Clear Failed', error.message || 'Could not clear preferences.', 'error');
     }
   };
 

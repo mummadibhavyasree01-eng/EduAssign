@@ -721,10 +721,20 @@ document.addEventListener('DOMContentLoaded', () => {
           ...fac,
           allocations: filteredAllocations
         };
-      }).filter(fac => fac.allocations.length > 0);
+      }).filter(fac => fac.allocations.length > 0 || fac.hasPreferences === true || fac.isUnknown === true);
 
-      // Sort report data naturally by faculty ID
-      reportData.sort((a, b) => (a.facultyId || '').localeCompare(b.facultyId || '', 'en', { numeric: true, sensitivity: 'base' }));
+      // Sort report data by preference submission order (earlier preference submitters first)
+      reportData.sort((a, b) => {
+        const isUnknownA = a.isUnknown === true;
+        const isUnknownB = b.isUnknown === true;
+        if (isUnknownA !== isUnknownB) return isUnknownA ? 1 : -1;
+
+        const orderA = a.submissionOrder != null ? a.submissionOrder : Number.MAX_SAFE_INTEGER;
+        const orderB = b.submissionOrder != null ? b.submissionOrder : Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+
+        return (a.facultyId || '').localeCompare(b.facultyId || '', 'en', { numeric: true, sensitivity: 'base' });
+      });
 
       renderReportTable(reportData);
     } catch (error) {

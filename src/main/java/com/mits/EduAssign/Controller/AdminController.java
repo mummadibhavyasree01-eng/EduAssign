@@ -247,6 +247,25 @@ public class AdminController {
 	        return ResponseEntity.ok("Section Allocation Deleted Successfully");
 	    }
 
+	    @PostMapping("/delete-allocation-by-details")
+	    public ResponseEntity<?> deleteAllocationByDetails(
+	            @RequestParam(required = false) String subjectId,
+	            @RequestParam(required = false) String sectionName,
+	            @RequestParam(required = false) String facultyId,
+	            @RequestParam(required = false) Long id) {
+	        try {
+	            if (subjectId != null) {
+	                subjectService.deleteSectionAllocationByDetails(subjectId, sectionName, facultyId);
+	            }
+	            if (id != null) {
+	                subjectService.deleteSectionAllocation(id);
+	            }
+	            return ResponseEntity.ok(Map.of("message", "Allocation deleted successfully"));
+	        } catch (Exception e) {
+	            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+	        }
+	    }
+
 	    @PostMapping("/finalize-allocations")
 	    public ResponseEntity<?> finalizeAllocations() {
 	        subjectService.finalizeAllocations();

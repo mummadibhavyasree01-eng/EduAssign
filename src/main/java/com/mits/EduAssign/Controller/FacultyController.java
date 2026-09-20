@@ -82,4 +82,17 @@ public class FacultyController {
     public ResponseEntity<List<FacultySubjectPreference>> getPreferencesByAcademicYear(@RequestParam String academicYear) {
         return ResponseEntity.ok(subjectService.getPreferencesByAcademicYear(academicYear));
     }
+
+    @GetMapping("/preferences/subject-limits")
+    public ResponseEntity<?> getSubjectPreferenceLimits(
+            @RequestParam(required = false) String academicYear,
+            @RequestParam(required = false) String department) {
+        return ResponseEntity.ok(subjectService.getSubjectPreferenceLimits(academicYear, department));
+    }
+
+    @DeleteMapping("/preferences/clear-by-year")
+    public ResponseEntity<?> clearPreferencesByAcademicYear(@RequestParam String academicYear) {
+        subjectService.clearPreferencesByAcademicYear(academicYear);
+        return ResponseEntity.ok("Preferences cleared successfully");
+    }
 }

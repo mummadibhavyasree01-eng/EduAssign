@@ -138,6 +138,18 @@ function logout() {
 
 // Enhanced Fetch wrapper
 async function apiRequest(url, options = {}) {
+  // Prevent GET caching
+  const method = (options.method || 'GET').toUpperCase();
+  if (method === 'GET') {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}_t=${Date.now()}`;
+  }
+  options.headers = {
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    ...options.headers
+  };
   // Set JSON headers by default if body is passed and it's not FormData
   if (options.body && !(options.body instanceof FormData) && !(options.body instanceof URLSearchParams)) {
     options.headers = {

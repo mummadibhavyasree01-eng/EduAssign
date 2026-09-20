@@ -80,15 +80,18 @@
       <section id="selections-tab" class="tab-content active">
         <div class="tab-grid">
           <!-- Submitted Preferences -->
-          <div class="glass-panel section-container col-span-2">
+          <div class="glass-panel section-container col-span-2" style="position: relative; z-index: 5;">
             <div class="section-actions" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
               <div>
                 <h3>Faculty Subject Preferences</h3>
                 <p>Track choices made by faculty members for subject allocation</p>
               </div>
-              <div>
+              <div style="display: flex; gap: 8px; align-items: center;">
                 <button class="btn btn-secondary btn-sm" onclick="exportPreferencesToExcel()" style="background: var(--secondary-gradient); border: none; color: #fff; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 0 10px rgba(20, 184, 166, 0.3);">
                   <i class="fas fa-file-excel"></i> Export to Excel
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="clearAllPreferencesAdmin()" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: var(--error); display: inline-flex; align-items: center; gap: 6px;">
+                  <i class="fas fa-trash-alt"></i> Clear Preferences
                 </button>
               </div>
             </div>
@@ -108,7 +111,7 @@
                     <span id="custom-pref-trigger-label" style="color: var(--text-muted);">Select Year & Sem</span>
                     <i class="fas fa-chevron-down" style="font-size: 0.8rem; color: var(--text-muted);"></i>
                   </div>
-                  <div id="custom-pref-year-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+                  <div id="custom-pref-year-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 380px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); scrollbar-width: thin;">
                     <!-- Populated dynamically via JS -->
                   </div>
                 </div>
@@ -141,7 +144,7 @@
           </div>
 
           <!-- Non-Submitted Faculty -->
-          <div class="glass-panel section-container">
+          <div class="glass-panel section-container" style="position: relative; z-index: 1;">
             <h3>Pending Submissions</h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Faculty members who have not yet selected any preferences.</p>
             
@@ -199,7 +202,7 @@
                     <span id="custom-sub-trigger-label" style="color: var(--text-muted);">Select Year & Sem</span>
                     <i class="fas fa-chevron-down" style="font-size: 0.8rem; color: var(--text-muted);"></i>
                   </div>
-                  <div id="custom-sub-year-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+                  <div id="custom-sub-year-menu" class="custom-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 380px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: var(--border-radius-md); margin-top: 4px; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); scrollbar-width: thin;">
                     <!-- Populated dynamically via JS -->
                   </div>
                 </div>
@@ -492,9 +495,6 @@
           </div>
           <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
             <span class="status-badge" id="finalize-status-badge" style="padding: 8px 16px; font-size: 0.85rem;">Draft Mode</span>
-            <button class="btn btn-danger" id="clear-allocations-btn" onclick="clearAllAllocationsWorkspace()" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: var(--error);">
-              <i class="fas fa-trash-alt"></i> Clear Allocations
-            </button>
             <button class="btn btn-secondary" id="finalize-allocations-btn" onclick="finalizeAllAllocations()">
               <i class="fas fa-check-double"></i> Finalize Allocations
             </button>
@@ -988,7 +988,7 @@
   </style>
 
   <!-- Scripts -->
-  <script src="js/common.js?v=42"></script>
-  <script src="js/admin.js?v=42"></script>
+  <script src="js/common.js?v=44"></script>
+  <script src="js/admin.js?v=44"></script>
 </body>
 </html>
