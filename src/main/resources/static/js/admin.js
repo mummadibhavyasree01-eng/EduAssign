@@ -250,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const selectionWindow = await apiRequest('/adminfaculty/deadline').catch(() => null);
       const activeWinList = Array.isArray(selectionWindow) ? selectionWindow.filter(w => w.active) : (selectionWindow && selectionWindow.active ? [selectionWindow] : []);
       const activeWin = activeWinList[0] || null;
-      const defaultAcadYear = (activeWin && activeWin.academicYear) ? activeWin.academicYear : ((academicYears && academicYears.length > 0) ? academicYears[0].year : '2026-27');
+      const defaultAcadYear = (activeWin && activeWin.academicYear) ? activeWin.academicYear : ((academicYears && academicYears.length > 0) ? academicYears[academicYears.length - 1].year : '2026-27');
 
       const academicYearInput = document.getElementById('pref-academic-year-input');
       if (academicYearInput && !academicYearInput.value) {
