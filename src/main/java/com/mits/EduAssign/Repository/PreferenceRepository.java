@@ -9,5 +9,7 @@ import com.mits.EduAssign.Entity.FacultySubjectPreference;
 public interface PreferenceRepository extends JpaRepository<FacultySubjectPreference, Long> {
     List<FacultySubjectPreference> findByFacultyId(String facultyId);
     List<FacultySubjectPreference> findByFacultyIdOrderByIdAsc(String facultyId);
+    List<FacultySubjectPreference> findByFacultyIdIgnoreCaseOrderByIdAsc(String facultyId);
     void deleteByFacultyId(String facultyId);
+    void deleteByFacultyIdIgnoreCase(String facultyId);
 }

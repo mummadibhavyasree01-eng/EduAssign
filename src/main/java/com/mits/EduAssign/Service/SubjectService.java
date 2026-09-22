@@ -234,7 +234,7 @@ public class SubjectService {
             }
             List<FacultySubjectPreference> existing = preferenceRepository.findByFacultyId(facultyId);
             for (FacultySubjectPreference p : existing) {
-                if (p.getSubjectId() != null && subIdsInWindow.contains(p.getSubjectId().toLowerCase())) {
+                if (p.getSubjectId() != null && (subIdsInWindow.contains(p.getSubjectId().toLowerCase()) || "AUTO_RANDOM".equalsIgnoreCase(p.getSubjectId()))) {
                     preferenceRepository.delete(p);
                 }
             }
@@ -253,9 +253,15 @@ public class SubjectService {
         clearPreferencesInActiveWindow(facultyId);
 
         // Save new preferences
+        java.util.Set<String> savedKeys = new java.util.HashSet<>();
         for (String subjectId : subjectIds) {
-            FacultySubjectPreference pref = new FacultySubjectPreference(facultyId, subjectId);
-            preferenceRepository.save(pref);
+            if (subjectId == null || subjectId.trim().isEmpty()) continue;
+            String key = subjectId.toUpperCase() + "_false";
+            if (!savedKeys.contains(key)) {
+                savedKeys.add(key);
+                FacultySubjectPreference pref = new FacultySubjectPreference(facultyId, subjectId);
+                preferenceRepository.save(pref);
+            }
         }
     }
 
@@ -275,7 +281,7 @@ public class SubjectService {
                 .collect(Collectors.toSet());
 
         for (FacultySubjectPreference pref : preferences) {
-            if (pref.getSubjectId() != null) {
+            if (pref.getSubjectId() != null && !"AUTO_RANDOM".equalsIgnoreCase(pref.getSubjectId())) {
                 String subKey = pref.getSubjectId().toLowerCase();
                 String matchKey = subKey + "_" + pref.isMock();
                 if (!alreadySelectedSubIds.contains(matchKey)) {
@@ -298,9 +304,17 @@ public class SubjectService {
         // Clear existing preferences first
         clearPreferencesInActiveWindow(facultyId);
 
-        // Save new preferences
+        // Save new preferences (deduplicated)
+        java.util.Set<String> savedKeys = new java.util.HashSet<>();
         for (FacultySubjectPreference pref : preferences) {
-            preferenceRepository.save(pref);
+            if (pref.getSubjectId() == null || pref.getSubjectId().trim().isEmpty()) continue;
+            pref.setFacultyId(facultyId);
+            pref.setId(null);
+            String key = pref.getSubjectId().toUpperCase() + "_" + pref.isMock();
+            if (!savedKeys.contains(key)) {
+                savedKeys.add(key);
+                preferenceRepository.save(pref);
+            }
         }
     }
 
@@ -429,8 +443,9 @@ public class SubjectService {
 
     public boolean isBeforeDeadline() {
         List<SubjectSelectionWindow> windows = windowRepository.findAll();
+        if (windows.isEmpty()) return true;
         for (SubjectSelectionWindow w : windows) {
-            if (w.isActive() && LocalDateTime.now().isBefore(w.getDeadline())) {
+            if (w.isActive() && (w.getDeadline() == null || LocalDateTime.now().isBefore(w.getDeadline()))) {
                 return true;
             }
         }
@@ -440,7 +455,7 @@ public class SubjectService {
     public boolean isBeforeDeadlineForYear(Integer year) {
         if (year == null) return isBeforeDeadline();
         return windowRepository.findById(year)
-                .map(w -> w.isActive() && LocalDateTime.now().isBefore(w.getDeadline()))
+                .map(w -> w.isActive() && (w.getDeadline() == null || LocalDateTime.now().isBefore(w.getDeadline())))
                 .orElse(false);
     }
 
@@ -537,19 +552,21 @@ public class SubjectService {
                 }
             }
 
-            // Enforce: If total allocated subjects >= 3, they cannot all be from the same study year
-            List<Integer> years = new java.util.ArrayList<>();
-            for (SubjectAllocation a : facAllocs) {
-                Subject s = subjectRepository.findById(a.getSubjectId()).orElse(null);
-                if (s != null) {
-                    years.add(s.getYear());
+            // Enforce: If total allocated regular subjects >= 3, they cannot all be from the same study year
+            if (!subject.isMock()) {
+                List<Integer> years = new java.util.ArrayList<>();
+                for (SubjectAllocation a : facAllocs) {
+                    Subject s = subjectRepository.findById(a.getSubjectId()).orElse(null);
+                    if (s != null && !s.isMock()) {
+                        years.add(s.getYear());
+                    }
                 }
-            }
-            years.add(subject.getYear());
-            if (years.size() >= 3) {
-                long distinctYearsCount = years.stream().distinct().count();
-                if (distinctYearsCount == 1) {
-                    throw new IllegalArgumentException("All allocated subjects cannot be from the same study year (" + subject.getYear() + "). Allocation must span at least two different years.");
+                years.add(subject.getYear());
+                if (years.size() >= 3) {
+                    long distinctYearsCount = years.stream().distinct().count();
+                    if (distinctYearsCount == 1) {
+                        throw new IllegalArgumentException("All allocated regular subjects cannot be from the same study year (" + subject.getYear() + "). Allocation must span at least two different years.");
+                    }
                 }
             }
         }
@@ -731,19 +748,21 @@ public class SubjectService {
         boolean alreadyHasSubject = facAllocs.stream().anyMatch(a -> a.getSubjectId().equalsIgnoreCase(allocation.getSubjectId()));
 
         if (!alreadyHasSubject) {
-            List<Integer> allocatedYears = new ArrayList<>();
-            for (SubjectAllocation sa : facAllocs) {
-                Subject s = subjectRepository.findById(sa.getSubjectId()).orElse(null);
-                if (s != null && s.getAcademicYear() != null && s.getAcademicYear().equalsIgnoreCase(currentAcademicYear)) {
-                    allocatedYears.add(s.getYear());
+            if (!subject.isMock()) {
+                List<Integer> allocatedYears = new ArrayList<>();
+                for (SubjectAllocation sa : facAllocs) {
+                    Subject s = subjectRepository.findById(sa.getSubjectId()).orElse(null);
+                    if (s != null && !s.isMock() && s.getAcademicYear() != null && s.getAcademicYear().equalsIgnoreCase(currentAcademicYear)) {
+                        allocatedYears.add(s.getYear());
+                    }
                 }
-            }
-            allocatedYears.add(subject.getYear());
+                allocatedYears.add(subject.getYear());
 
-            if (allocatedYears.size() >= 3) {
-                long distinctYearsCount = allocatedYears.stream().distinct().count();
-                if (distinctYearsCount == 1) {
-                    throw new IllegalArgumentException("Faculty member cannot be allocated all subjects from the same study year.");
+                if (allocatedYears.size() >= 3) {
+                    long distinctYearsCount = allocatedYears.stream().distinct().count();
+                    if (distinctYearsCount == 1) {
+                        throw new IllegalArgumentException("Faculty member cannot be allocated all subjects from the same study year.");
+                    }
                 }
             }
 
@@ -1021,19 +1040,21 @@ public class SubjectService {
             boolean alreadyHasSubject = facAllocs.stream().anyMatch(a -> a.getSubjectId().equalsIgnoreCase(subjectId));
             
             if (!alreadyHasSubject) {
-                List<Integer> allocatedYears = new ArrayList<>();
-                for (SubjectAllocation sa : facAllocs) {
-                    Subject s = subjectRepository.findById(sa.getSubjectId()).orElse(null);
-                    if (s != null && s.getAcademicYear() != null && s.getAcademicYear().equalsIgnoreCase(currentAcademicYear)) {
-                        allocatedYears.add(s.getYear());
+                if (!subject.isMock()) {
+                    List<Integer> allocatedYears = new ArrayList<>();
+                    for (SubjectAllocation sa : facAllocs) {
+                        Subject s = subjectRepository.findById(sa.getSubjectId()).orElse(null);
+                        if (s != null && !s.isMock() && s.getAcademicYear() != null && s.getAcademicYear().equalsIgnoreCase(currentAcademicYear)) {
+                            allocatedYears.add(s.getYear());
+                        }
                     }
-                }
-                allocatedYears.add(subject.getYear());
-                
-                if (allocatedYears.size() >= 3) {
-                    long distinctYearsCount = allocatedYears.stream().distinct().count();
-                    if (distinctYearsCount == 1) {
-                        continue; // Same year rule violation
+                    allocatedYears.add(subject.getYear());
+                    
+                    if (allocatedYears.size() >= 3) {
+                        long distinctYearsCount = allocatedYears.stream().distinct().count();
+                        if (distinctYearsCount == 1) {
+                            continue; // Same year rule violation
+                        }
                     }
                 }
                 
@@ -1142,10 +1163,176 @@ public class SubjectService {
         public String getReasonRejected() { return reasonRejected; }
     }
 
+    public static class FacultyReportRow {
+        private String facultyId;
+        private String facultyName;
+        private List<String> preferences = new ArrayList<>();
+        private List<String> allocations = new ArrayList<>();
+        private List<String> allocatedSections = new ArrayList<>();
+        private int totalCount;
+        private int distinctSubjectsCount;
+        private int totalHours;
+        private int workloadHours;
+        private int pref1Matches;
+        private int pref2Matches;
+        private int pref3Matches;
+        private int satisfactionPercentage;
+        private String experienceLevel; // High, Medium, Low, None
+        private String status; // GOOD, FAIR, NO ALLOCATION
+        private String zeroAllocationReason;
+        private List<String> zeroAllocationExplanations = new ArrayList<>();
+
+        public FacultyReportRow() {}
+
+        public String getFacultyId() { return facultyId; }
+        public void setFacultyId(String facultyId) { this.facultyId = facultyId; }
+        public String getFacultyName() { return facultyName; }
+        public void setFacultyName(String facultyName) { this.facultyName = facultyName; }
+        public List<String> getPreferences() { return preferences; }
+        public void setPreferences(List<String> preferences) { this.preferences = preferences; }
+        public List<String> getAllocations() { return allocations; }
+        public void setAllocations(List<String> allocations) { this.allocations = allocations; this.allocatedSections = allocations; }
+        public List<String> getAllocatedSections() { return allocatedSections; }
+        public void setAllocatedSections(List<String> allocatedSections) { this.allocatedSections = allocatedSections; this.allocations = allocatedSections; }
+        public int getTotalCount() { return totalCount; }
+        public void setTotalCount(int totalCount) { this.totalCount = totalCount; this.distinctSubjectsCount = totalCount; }
+        public int getDistinctSubjectsCount() { return distinctSubjectsCount; }
+        public void setDistinctSubjectsCount(int distinctSubjectsCount) { this.distinctSubjectsCount = distinctSubjectsCount; this.totalCount = distinctSubjectsCount; }
+        public int getTotalHours() { return totalHours; }
+        public void setTotalHours(int totalHours) { this.totalHours = totalHours; this.workloadHours = totalHours; }
+        public int getWorkloadHours() { return workloadHours; }
+        public void setWorkloadHours(int workloadHours) { this.workloadHours = workloadHours; this.totalHours = workloadHours; }
+        public int getPref1Matches() { return pref1Matches; }
+        public void setPref1Matches(int pref1Matches) { this.pref1Matches = pref1Matches; }
+        public int getPref2Matches() { return pref2Matches; }
+        public void setPref2Matches(int pref2Matches) { this.pref2Matches = pref2Matches; }
+        public int getPref3Matches() { return pref3Matches; }
+        public void setPref3Matches(int pref3Matches) { this.pref3Matches = pref3Matches; }
+        public int getSatisfactionPercentage() { return satisfactionPercentage; }
+        public void setSatisfactionPercentage(int satisfactionPercentage) { this.satisfactionPercentage = satisfactionPercentage; }
+        public String getExperienceLevel() { return experienceLevel; }
+        public void setExperienceLevel(String experienceLevel) { this.experienceLevel = experienceLevel; }
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
+        public String getZeroAllocationReason() { return zeroAllocationReason; }
+        public void setZeroAllocationReason(String zeroAllocationReason) { this.zeroAllocationReason = zeroAllocationReason; }
+        public List<String> getZeroAllocationExplanations() { return zeroAllocationExplanations; }
+        public void setZeroAllocationExplanations(List<String> zeroAllocationExplanations) { this.zeroAllocationExplanations = zeroAllocationExplanations; }
+    }
+
+    public static class AllocationSummaryReport {
+        private String academicYear;
+        private String department;
+        private Integer semester;
+        private int workloadLimit;
+        private int subjectHours;
+        private int maxSubjects;
+        private int maxRegular;
+        private int maxMock;
+
+        private int totalFaculty;
+        private int totalFacultyCount;
+        private int facultyAllocated;
+        private int facultyWithoutAllocation;
+        private int zeroAllocationFacultyCount;
+        private int totalSections;
+        private int allocatedSections;
+        private int unallocatedSections;
+        private double pref1SatisfactionPct;
+        private double pref2SatisfactionPct;
+        private double pref3SatisfactionPct;
+        private double avgSectionsPerFaculty;
+        private double averageSatisfactionPercentage;
+        private double averageWorkloadHours;
+        private double allocationCoveragePercentage;
+        private int maxFacultyLoadHours;
+        private int workloadViolations;
+        private int qualificationViolations;
+
+        private List<FacultyReportRow> facultyRows = new ArrayList<>();
+        private List<FacultyReportRow> facultyReports = new ArrayList<>();
+        private List<AllocationExplanation> explanations = new ArrayList<>();
+
+        public AllocationSummaryReport() {}
+
+        public String getAcademicYear() { return academicYear; }
+        public void setAcademicYear(String academicYear) { this.academicYear = academicYear; }
+        public String getDepartment() { return department; }
+        public void setDepartment(String department) { this.department = department; }
+        public Integer getSemester() { return semester; }
+        public void setSemester(Integer semester) { this.semester = semester; }
+        public int getWorkloadLimit() { return workloadLimit; }
+        public void setWorkloadLimit(int workloadLimit) { this.workloadLimit = workloadLimit; }
+        public int getSubjectHours() { return subjectHours; }
+        public void setSubjectHours(int subjectHours) { this.subjectHours = subjectHours; }
+        public int getMaxSubjects() { return maxSubjects; }
+        public void setMaxSubjects(int maxSubjects) { this.maxSubjects = maxSubjects; }
+        public int getMaxRegular() { return maxRegular; }
+        public void setMaxRegular(int maxRegular) { this.maxRegular = maxRegular; }
+        public int getMaxMock() { return maxMock; }
+        public void setMaxMock(int maxMock) { this.maxMock = maxMock; }
+
+        public int getTotalFaculty() { return totalFaculty; }
+        public void setTotalFaculty(int totalFaculty) { this.totalFaculty = totalFaculty; this.totalFacultyCount = totalFaculty; }
+        public int getTotalFacultyCount() { return totalFacultyCount; }
+        public void setTotalFacultyCount(int totalFacultyCount) { this.totalFacultyCount = totalFacultyCount; this.totalFaculty = totalFacultyCount; }
+
+        public int getFacultyAllocated() { return facultyAllocated; }
+        public void setFacultyAllocated(int facultyAllocated) { this.facultyAllocated = facultyAllocated; }
+
+        public int getFacultyWithoutAllocation() { return facultyWithoutAllocation; }
+        public void setFacultyWithoutAllocation(int facultyWithoutAllocation) { this.facultyWithoutAllocation = facultyWithoutAllocation; this.zeroAllocationFacultyCount = facultyWithoutAllocation; }
+        public int getZeroAllocationFacultyCount() { return zeroAllocationFacultyCount; }
+        public void setZeroAllocationFacultyCount(int zeroAllocationFacultyCount) { this.zeroAllocationFacultyCount = zeroAllocationFacultyCount; this.facultyWithoutAllocation = zeroAllocationFacultyCount; }
+
+        public int getTotalSections() { return totalSections; }
+        public void setTotalSections(int totalSections) { this.totalSections = totalSections; }
+        public int getAllocatedSections() { return allocatedSections; }
+        public void setAllocatedSections(int allocatedSections) { this.allocatedSections = allocatedSections; }
+        public int getUnallocatedSections() { return unallocatedSections; }
+        public void setUnallocatedSections(int unallocatedSections) { this.unallocatedSections = unallocatedSections; }
+
+        public double getPref1SatisfactionPct() { return pref1SatisfactionPct; }
+        public void setPref1SatisfactionPct(double pref1SatisfactionPct) { this.pref1SatisfactionPct = pref1SatisfactionPct; }
+        public double getPref2SatisfactionPct() { return pref2SatisfactionPct; }
+        public void setPref2SatisfactionPct(double pref2SatisfactionPct) { this.pref2SatisfactionPct = pref2SatisfactionPct; }
+        public double getPref3SatisfactionPct() { return pref3SatisfactionPct; }
+        public void setPref3SatisfactionPct(double pref3SatisfactionPct) { this.pref3SatisfactionPct = pref3SatisfactionPct; }
+
+        public double getAvgSectionsPerFaculty() { return avgSectionsPerFaculty; }
+        public void setAvgSectionsPerFaculty(double avgSectionsPerFaculty) { this.avgSectionsPerFaculty = avgSectionsPerFaculty; }
+        public double getAverageSatisfactionPercentage() { return averageSatisfactionPercentage; }
+        public void setAverageSatisfactionPercentage(double averageSatisfactionPercentage) { this.averageSatisfactionPercentage = averageSatisfactionPercentage; }
+        public double getAverageWorkloadHours() { return averageWorkloadHours; }
+        public void setAverageWorkloadHours(double averageWorkloadHours) { this.averageWorkloadHours = averageWorkloadHours; }
+        public double getAllocationCoveragePercentage() { return allocationCoveragePercentage; }
+        public void setAllocationCoveragePercentage(double allocationCoveragePercentage) { this.allocationCoveragePercentage = allocationCoveragePercentage; }
+
+        public int getMaxFacultyLoadHours() { return maxFacultyLoadHours; }
+        public void setMaxFacultyLoadHours(int maxFacultyLoadHours) { this.maxFacultyLoadHours = maxFacultyLoadHours; }
+        public int getWorkloadViolations() { return workloadViolations; }
+        public void setWorkloadViolations(int workloadViolations) { this.workloadViolations = workloadViolations; }
+        public int getQualificationViolations() { return qualificationViolations; }
+        public void setQualificationViolations(int qualificationViolations) { this.qualificationViolations = qualificationViolations; }
+
+        public List<FacultyReportRow> getFacultyRows() { return facultyRows; }
+        public void setFacultyRows(List<FacultyReportRow> facultyRows) { this.facultyRows = facultyRows; this.facultyReports = facultyRows; }
+        public List<FacultyReportRow> getFacultyReports() { return facultyReports; }
+        public void setFacultyReports(List<FacultyReportRow> facultyReports) { this.facultyReports = facultyReports; this.facultyRows = facultyReports; }
+
+        public List<AllocationExplanation> getExplanations() { return explanations; }
+        public void setExplanations(List<AllocationExplanation> explanations) { this.explanations = explanations; }
+    }
+
     private List<AllocationExplanation> latestAllocationExplanations = new ArrayList<>();
+    private AllocationSummaryReport latestAllocationSummaryReport = new AllocationSummaryReport();
 
     public List<AllocationExplanation> getLatestAllocationExplanations() {
         return new ArrayList<>(latestAllocationExplanations);
+    }
+
+    public AllocationSummaryReport getLatestAllocationSummaryReport() {
+        return latestAllocationSummaryReport;
     }
 
     @Transactional
@@ -1413,7 +1600,7 @@ public class SubjectService {
         for (AdminFaculty f : allFaculty) {
             String facId = f.getId();
             String facIdUpper = facId.toUpperCase();
-            List<FacultySubjectPreference> facPrefs = preferenceRepository.findByFacultyIdOrderByIdAsc(facId);
+            List<FacultySubjectPreference> facPrefs = getPreferencesForFaculty(facId);
 
             Long minPrefId = Long.MAX_VALUE;
             for (FacultySubjectPreference p : facPrefs) {
@@ -1447,6 +1634,8 @@ public class SubjectService {
                 FacultySubjectPreference pObj = regList.get(i);
                 String subId = pObj.getSubjectId();
                 if (subId != null) {
+                    Subject flexSub = findSubjectFlexible(subId, currentAcademicYear);
+                    if (flexSub != null) prefRankSubMap.put(flexSub.getId().toUpperCase(), pNum);
                     prefRankSubMap.put(subId.toUpperCase(), pNum);
                     FacultyPrefEntry entry = new FacultyPrefEntry(facId, subId, pNum, false, pObj.getId());
                     regularPreferenceRoundsMap.computeIfAbsent(pNum, k -> new ArrayList<>()).add(entry);
@@ -1460,6 +1649,8 @@ public class SubjectService {
                 FacultySubjectPreference pObj = mockList.get(i);
                 String subId = pObj.getSubjectId();
                 if (subId != null) {
+                    Subject flexSub = findSubjectFlexible(subId, currentAcademicYear);
+                    if (flexSub != null) prefRankSubMap.put(flexSub.getId().toUpperCase(), pNum);
                     prefRankSubMap.put(subId.toUpperCase(), pNum);
                     FacultyPrefEntry entry = new FacultyPrefEntry(facId, subId, pNum, true, pObj.getId());
                     mockPreferenceRoundsMap.computeIfAbsent(pNum, k -> new ArrayList<>()).add(entry);
@@ -1485,8 +1676,9 @@ public class SubjectService {
 
             if (!isAlreadyTeachingSub) {
                 int currentUniqueSubs = facultyUniqueSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
-                if (currentUniqueSubs + 1 > maxSubsVal) {
-                    return "Maximum distinct subjects limit reached (" + currentUniqueSubs + "/" + maxSubsVal + " subjects)";
+                int allowedTotalSubs = Math.max(maxSubsVal, maxRegVal + maxMockVal);
+                if (currentUniqueSubs + 1 > allowedTotalSubs) {
+                    return "Maximum distinct subjects limit reached (" + currentUniqueSubs + "/" + allowedTotalSubs + " subjects)";
                 }
 
                 int currentRegCount = facultyRegularSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
@@ -1509,15 +1701,17 @@ public class SubjectService {
                     }
                 }
 
-                // Same-year rule: faculty cannot take 3 or more subjects all from the exact same year
-                List<Integer> yearsAllocated = new ArrayList<>();
-                for (String sId : facultyUniqueSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet())) {
-                    Subject s = subjectRepository.findById(sId).orElse(null);
-                    if (s != null) yearsAllocated.add(s.getYear());
-                }
-                yearsAllocated.add(sub.getYear());
-                if (yearsAllocated.size() >= 3 && yearsAllocated.stream().distinct().count() == 1) {
-                    return "All allocated subjects cannot be from the same study year (" + sub.getYear() + ")";
+                // Same-year rule: faculty cannot take 3 or more regular subjects all from the exact same year when multiple active years exist
+                if (!sub.isMock() && activeYears.size() > 1) {
+                    List<Integer> yearsAllocated = new ArrayList<>();
+                    for (String sId : facultyUniqueSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet())) {
+                        Subject s = subjectRepository.findById(sId).orElse(null);
+                        if (s != null && !s.isMock()) yearsAllocated.add(s.getYear());
+                    }
+                    yearsAllocated.add(sub.getYear());
+                    if (yearsAllocated.size() >= 3 && yearsAllocated.stream().distinct().count() == 1) {
+                        return "All allocated regular subjects cannot be from the same study year (" + sub.getYear() + ")";
+                    }
                 }
             }
 
@@ -1580,138 +1774,233 @@ public class SubjectService {
             return f1Upper.compareTo(f2Upper);
         };
 
-        // Helper lambda to process preference rounds for a given preference map (Regular or Mock)
-        java.util.function.BiConsumer<java.util.Map<Integer, List<FacultyPrefEntry>>, Integer> processPreferenceRounds = (prefMap, maxRounds) -> {
-            for (int roundP = 1; roundP <= maxRounds; roundP++) {
-                List<FacultyPrefEntry> roundPrefs = prefMap.getOrDefault(roundP, java.util.Collections.emptyList());
-                if (roundPrefs.isEmpty()) continue;
+        // ----------------------------------------------------
+        // PHASE 1: FACULTY-WISE PREFERENCE ALLOCATION
+        // Process faculty one by one (in submission order / ID order):
+        // 1. Allocate regular subjects based on faculty's regular preferences (1 section per preference).
+        // 2. ONLY AFTER completion of regular subjects (>= 2 regular subjects), allocate mock subject based on faculty's mock preferences or auto fallback.
+        // 3. Move to next faculty member.
+        // ----------------------------------------------------
 
-                // Group preferences for this round by subjectId
-                java.util.Map<String, List<FacultyPrefEntry>> subjectPrefsInRound = new java.util.LinkedHashMap<>();
-                for (FacultyPrefEntry pe : roundPrefs) {
-                    subjectPrefsInRound.computeIfAbsent(pe.subjectId.toUpperCase(), k -> new ArrayList<>()).add(pe);
-                }
+        List<AdminFaculty> sortedFaculties = new ArrayList<>(allFaculty);
+        sortedFaculties.sort((f1, f2) -> {
+            String f1Upper = f1.getId().toUpperCase();
+            String f2Upper = f2.getId().toUpperCase();
+            Long sub1 = facultySubmissionOrderMap.getOrDefault(f1Upper, Long.MAX_VALUE);
+            Long sub2 = facultySubmissionOrderMap.getOrDefault(f2Upper, Long.MAX_VALUE);
+            if (!sub1.equals(sub2)) return Long.compare(sub1, sub2);
+            return f1Upper.compareTo(f2Upper);
+        });
 
-                // Sort subjects in this round: scarce subjects first -> Year ascending -> Subject ID ascending
-                List<Subject> subjectsInRound = subjects.stream()
-                        .filter(s -> subjectPrefsInRound.containsKey(s.getId().toUpperCase()))
-                        .sorted((sub1, sub2) -> {
-                            int c1 = subjectPrefsInRound.getOrDefault(sub1.getId().toUpperCase(), java.util.Collections.emptyList()).size();
-                            int c2 = subjectPrefsInRound.getOrDefault(sub2.getId().toUpperCase(), java.util.Collections.emptyList()).size();
-                            if (c1 != c2) return Integer.compare(c1, c2);
+        // ----------------------------------------------------
+        // PHASE 1: ROUND-ROBIN FAIR PREFERENCE ALLOCATION
+        // Allocate preferences in rounds across ALL faculty members so EVERY faculty member gets 1st preference before anyone gets 2nd preference, and 2nd preference before anyone gets mock/3rd preference.
+        // ----------------------------------------------------
 
-                            int yComp = Integer.compare(sub1.getYear(), sub2.getYear());
-                            if (yComp != 0) return yComp;
+        int maxRegPrefRounds = 0;
+        for (AdminFaculty f : sortedFaculties) {
+            List<FacultySubjectPreference> facPrefs = getPreferencesForFaculty(f.getId());
+            long count = facPrefs.stream().filter(p -> !p.isMock()).count();
+            if (count > maxRegPrefRounds) maxRegPrefRounds = (int) count;
+        }
+        if (maxRegPrefRounds > maxRegVal) maxRegPrefRounds = maxRegVal;
+        if (maxRegPrefRounds < 1) maxRegPrefRounds = 1;
 
-                            return sub1.getId().compareTo(sub2.getId());
-                        })
+        // Round 1 to Max Regular Preferences (Round-Robin across all faculty)
+        for (int round = 1; round <= maxRegPrefRounds; round++) {
+            final int currentRound = round;
+            for (AdminFaculty f : sortedFaculties) {
+                String facId = f.getId();
+                String facIdUpper = facId.toUpperCase();
+                List<FacultySubjectPreference> regPrefs = getPreferencesForFaculty(facId).stream()
+                        .filter(p -> !p.isMock())
                         .collect(Collectors.toList());
 
-                for (Subject sub : subjectsInRound) {
-                    String subIdUpper = sub.getId().toUpperCase();
-                    List<FacultyPrefEntry> candidatesForSub = subjectPrefsInRound.get(subIdUpper);
-                    if (candidatesForSub == null || candidatesForSub.isEmpty()) continue;
+                int maxRegLimit = (refWindow != null && refWindow.getMaxRegularPreferences() != null) ? refWindow.getMaxRegularPreferences() : 5;
+                if (regPrefs.size() > maxRegLimit) regPrefs = regPrefs.subList(0, maxRegLimit);
 
-                    int totalConfiguredSections = totalSectionsPerSubject.getOrDefault(subIdUpper, 0);
-                    List<FacultyPrefEntry> remainingCandidates = new ArrayList<>(candidatesForSub);
+                if (regPrefs.size() >= currentRound) {
+                    FacultySubjectPreference pObj = regPrefs.get(currentRound - 1);
+                    String subId = pObj.getSubjectId();
+                    if (subId == null || "AUTO_RANDOM".equalsIgnoreCase(subId)) continue;
 
-                    while (!remainingCandidates.isEmpty()) {
-                        // Filter candidates in this preference round who legally satisfy hard constraints
-                        List<FacultyPrefEntry> eligibleCandidates = remainingCandidates.stream()
-                                .filter(pe -> canTakeSectionStrict.test(pe.facultyId, sub))
-                                .collect(Collectors.toList());
+                    Subject sub = findSubjectFlexible(subId, currentAcademicYear);
+                    if (sub == null || sub.isMock()) continue;
 
-                        if (eligibleCandidates.isEmpty()) {
+                    int currentRegCount = facultyRegularSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
+                    if (currentRegCount >= maxRegVal) continue;
+
+                    if (!canTakeSectionStrict.test(facId, sub)) continue;
+
+                    SectionSlot targetSlot = null;
+                    for (SectionSlot slot : pendingSlots) {
+                        if (slot.subject.getId().equalsIgnoreCase(sub.getId())) {
+                            targetSlot = slot;
                             break;
                         }
+                    }
+                    if (targetSlot == null) continue;
 
-                        // Sort eligible candidates fairly: Subject count -> Workload -> Experience -> Earlier Submission Order -> Faculty ID
-                        final int currentRound = roundP;
-                        eligibleCandidates.sort((c1, c2) -> {
-                            String f1Upper = c1.facultyId.toUpperCase();
-                            String f2Upper = c2.facultyId.toUpperCase();
+                    int hoursBefore = facultyWorkloadHours.getOrDefault(facIdUpper, 0);
+                    assignSectionToFaculty.accept(targetSlot, facId);
+                    int hoursAfter = facultyWorkloadHours.getOrDefault(facIdUpper, 0);
 
-                            int s1 = facultyUniqueSubjects.getOrDefault(f1Upper, java.util.Collections.emptySet()).size();
-                            int s2 = facultyUniqueSubjects.getOrDefault(f2Upper, java.util.Collections.emptySet()).size();
-                            if (s1 != s2) return Integer.compare(s1, s2);
+                    AllocationExplanation expl = new AllocationExplanation();
+                    expl.setSubjectId(sub.getId());
+                    expl.setSubjectName(sub.getName());
+                    expl.setSubjectYear(sub.getYear());
+                    expl.setSectionName(targetSlot.sectionName);
+                    expl.setFacultyId(facId);
+                    expl.setFacultyName(f.getName());
+                    expl.setPreference("P" + currentRound);
+                    expl.setHoursBefore(hoursBefore);
+                    expl.setHoursAfter(hoursAfter);
+                    expl.setReasonSelected("Selected as Preference P" + currentRound + " in Round " + currentRound);
+                    expl.setUnknown(false);
+                    explanations.add(expl);
 
-                            int h1 = facultyWorkloadHours.getOrDefault(f1Upper, 0);
-                            int h2 = facultyWorkloadHours.getOrDefault(f2Upper, 0);
-                            if (h1 != h2) return Integer.compare(h1, h2);
+                    pendingSlots.remove(targetSlot);
 
-                            int exp1 = facultyExperienceMap.getOrDefault(f1Upper, java.util.Collections.emptyMap()).getOrDefault(subIdUpper, 0);
-                            int exp2 = facultyExperienceMap.getOrDefault(f2Upper, java.util.Collections.emptyMap()).getOrDefault(subIdUpper, 0);
-                            if (exp1 != exp2) return Integer.compare(exp2, exp1);
-
-                            Long prefId1 = c1.preferenceDbId != null ? c1.preferenceDbId : facultySubmissionOrderMap.getOrDefault(f1Upper, Long.MAX_VALUE);
-                            Long prefId2 = c2.preferenceDbId != null ? c2.preferenceDbId : facultySubmissionOrderMap.getOrDefault(f2Upper, Long.MAX_VALUE);
-                            if (!prefId1.equals(prefId2)) return Long.compare(prefId1, prefId2);
-
-                            return f1Upper.compareTo(f2Upper);
-                        });
-
-                        FacultyPrefEntry chosenCandidate = eligibleCandidates.get(0);
-                        String chosenFacId = chosenCandidate.facultyId;
-                        String chosenFacIdUpper = chosenFacId.toUpperCase();
-                        AdminFaculty chosenFacultyObj = facultyMap.get(chosenFacIdUpper);
-
-                        // P1 Minimum-2 Rule: If faculty has subject as P1 and subject has >= 2 sections, try giving 2 sections
-                        int targetSectionsToAllocate = (roundP == 1 && totalConfiguredSections >= 2) ? 2 : 1;
-                        int sectionsAllocatedToChosen = 0;
-
-                        while (sectionsAllocatedToChosen < targetSectionsToAllocate) {
-                            SectionSlot nextSlot = null;
-                            for (SectionSlot slot : pendingSlots) {
-                                if (slot.subject.getId().equalsIgnoreCase(sub.getId())) {
-                                    nextSlot = slot;
-                                    break;
-                                }
-                            }
-                            if (nextSlot == null) break;
-
-                            if (!canTakeSectionStrict.test(chosenFacId, sub)) {
+                    // 1ST PREFERENCE MULTI-SECTION PASS (Up to 2 sections if feasible)
+                    if (currentRound == 1) {
+                        // Check if a second section of the same 1st preference subject is available
+                        SectionSlot secondSlot = null;
+                        for (SectionSlot slot : pendingSlots) {
+                            if (slot.subject.getId().equalsIgnoreCase(sub.getId())) {
+                                secondSlot = slot;
                                 break;
                             }
-
-                            int hoursBefore = facultyWorkloadHours.getOrDefault(chosenFacIdUpper, 0);
-                            assignSectionToFaculty.accept(nextSlot, chosenFacId);
-                            int hoursAfter = facultyWorkloadHours.getOrDefault(chosenFacIdUpper, 0);
-
-                            AllocationExplanation expl = new AllocationExplanation();
-                            expl.setSubjectId(sub.getId());
-                            expl.setSubjectName(sub.getName());
-                            expl.setSubjectYear(sub.getYear());
-                            expl.setSectionName(nextSlot.sectionName);
-                            expl.setFacultyId(chosenFacId);
-                            expl.setFacultyName(chosenFacultyObj != null ? chosenFacultyObj.getName() : chosenFacId);
-                            expl.setPreference("P" + roundP);
-                            expl.setHoursBefore(hoursBefore);
-                            expl.setHoursAfter(hoursAfter);
-                            expl.setReasonSelected(roundP == 1 && totalConfiguredSections >= 2 ? "Selected as Preference P1 under Minimum-2 Rule" : "Selected as Preference P" + roundP);
-                            expl.setUnknown(false);
-                            explanations.add(expl);
-
-                            pendingSlots.remove(nextSlot);
-                            sectionsAllocatedToChosen++;
                         }
 
-                        remainingCandidates.remove(chosenCandidate);
+                        if (secondSlot != null) {
+                            int hoursNow = facultyWorkloadHours.getOrDefault(facIdUpper, 0);
+                            if (hoursNow + subHours <= hoursLimitVal) {
+                                // Feasibility check: check how many other faculty chose this subject as 1st preference and are eligible
+                                long otherEligible1stPrefCount = sortedFaculties.stream()
+                                        .filter(other -> !other.getId().equalsIgnoreCase(facId))
+                                        .filter(other -> {
+                                            List<FacultySubjectPreference> otherPrefs = getPreferencesForFaculty(other.getId()).stream()
+                                                    .filter(p -> !p.isMock())
+                                                    .collect(Collectors.toList());
+                                            if (otherPrefs.isEmpty()) return false;
+                                            String firstSubId = otherPrefs.get(0).getSubjectId();
+                                            if (firstSubId == null) return false;
+                                            Subject otherFirstSub = findSubjectFlexible(firstSubId, currentAcademicYear);
+                                            return otherFirstSub != null && otherFirstSub.getId().equalsIgnoreCase(sub.getId()) && canTakeSectionStrict.test(other.getId(), sub);
+                                        })
+                                        .count();
+
+                                long remainingSubSectionsCount = pendingSlots.stream()
+                                        .filter(slot -> slot.subject.getId().equalsIgnoreCase(sub.getId()))
+                                        .count();
+
+                                // If giving a 2nd section leaves enough sections for all other 1st-preference claimants
+                                if (remainingSubSectionsCount - 1 >= otherEligible1stPrefCount) {
+                                    int hBefore2 = facultyWorkloadHours.getOrDefault(facIdUpper, 0);
+                                    assignSectionToFaculty.accept(secondSlot, facId);
+                                    int hAfter2 = facultyWorkloadHours.getOrDefault(facIdUpper, 0);
+
+                                    AllocationExplanation expl2 = new AllocationExplanation();
+                                    expl2.setSubjectId(sub.getId());
+                                    expl2.setSubjectName(sub.getName());
+                                    expl2.setSubjectYear(sub.getYear());
+                                    expl2.setSectionName(secondSlot.sectionName);
+                                    expl2.setFacultyId(facId);
+                                    expl2.setFacultyName(f.getName());
+                                    expl2.setPreference("P1");
+                                    expl2.setHoursBefore(hBefore2);
+                                    expl2.setHoursAfter(hAfter2);
+                                    expl2.setReasonSelected("Selected as 2nd Section for Preference P1 in Round 1 (Feasible up to 2 sections rule)");
+                                    expl2.setUnknown(false);
+                                    explanations.add(expl2);
+
+                                    pendingSlots.remove(secondSlot);
+                                }
+                            }
+                        }
                     }
                 }
             }
-        };
+        }
 
-        // ----------------------------------------------------
-        // PHASE 1: GLOBAL REGULAR PREFERENCE ROUNDS (P = 1, 2, ... maxRegPrefRound)
-        // Allocates core Regular P1, then Regular P2, etc. across all years
-        // ----------------------------------------------------
-        processPreferenceRounds.accept(regularPreferenceRoundsMap, maxRegPrefRound);
+        // Mock Subject Allocation Phase (Round-Robin for faculty with >= 2 regular subjects)
+        for (AdminFaculty f : sortedFaculties) {
+            String facId = f.getId();
+            String facIdUpper = facId.toUpperCase();
+            int currentRegCountAfterReg = facultyRegularSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
+            int currentMockCount = facultyMockSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
 
-        // ----------------------------------------------------
-        // PHASE 1.5: GLOBAL MOCK PREFERENCE ROUNDS (P = 1, 2, ... maxMockPrefRound)
-        // Allocates Mock P1, then Mock P2 across all years for faculty mock slots
-        // ----------------------------------------------------
-        processPreferenceRounds.accept(mockPreferenceRoundsMap, maxMockPrefRound);
+            if (currentRegCountAfterReg >= 2 && currentMockCount < maxMockVal) {
+                List<FacultySubjectPreference> mockPrefs = getPreferencesForFaculty(facId).stream()
+                        .filter(p -> p.isMock())
+                        .collect(Collectors.toList());
+
+                int maxMockLimit = (refWindow != null && refWindow.getMaxMockPreferences() != null) ? refWindow.getMaxMockPreferences() : 2;
+                if (mockPrefs.size() > maxMockLimit) mockPrefs = mockPrefs.subList(0, maxMockLimit);
+
+                Subject targetMockSub = null;
+                int mockPNum = 0;
+
+                for (int i = 0; i < mockPrefs.size(); i++) {
+                    FacultySubjectPreference pObj = mockPrefs.get(i);
+                    String subId = pObj.getSubjectId();
+                    if (subId == null || "AUTO_RANDOM".equalsIgnoreCase(subId)) continue;
+
+                    Subject sub = findSubjectFlexible(subId, currentAcademicYear);
+                    if (sub == null || !sub.isMock()) continue;
+
+                    if (canTakeSectionStrict.test(facId, sub)) {
+                        boolean hasSlot = pendingSlots.stream().anyMatch(slot -> slot.subject.getId().equalsIgnoreCase(sub.getId()));
+                        if (hasSlot) {
+                            targetMockSub = sub;
+                            mockPNum = i + 1;
+                            break;
+                        }
+                    }
+                }
+
+                if (targetMockSub == null) {
+                    for (SectionSlot slot : pendingSlots) {
+                        if (slot.subject.isMock() && canTakeSectionStrict.test(facId, slot.subject)) {
+                            targetMockSub = slot.subject;
+                            mockPNum = 0;
+                            break;
+                        }
+                    }
+                }
+
+                if (targetMockSub != null) {
+                    SectionSlot targetSlot = null;
+                    for (SectionSlot slot : pendingSlots) {
+                        if (slot.subject.getId().equalsIgnoreCase(targetMockSub.getId())) {
+                            targetSlot = slot;
+                            break;
+                        }
+                    }
+                    if (targetSlot != null) {
+                        int hoursBefore = facultyWorkloadHours.getOrDefault(facIdUpper, 0);
+                        assignSectionToFaculty.accept(targetSlot, facId);
+                        int hoursAfter = facultyWorkloadHours.getOrDefault(facIdUpper, 0);
+
+                        AllocationExplanation expl = new AllocationExplanation();
+                        expl.setSubjectId(targetMockSub.getId());
+                        expl.setSubjectName(targetMockSub.getName());
+                        expl.setSubjectYear(targetMockSub.getYear());
+                        expl.setSectionName(targetSlot.sectionName);
+                        expl.setFacultyId(facId);
+                        expl.setFacultyName(f.getName());
+                        expl.setPreference(mockPNum > 0 ? "Mock P" + mockPNum : "Auto Mock");
+                        expl.setHoursBefore(hoursBefore);
+                        expl.setHoursAfter(hoursAfter);
+                        expl.setReasonSelected(mockPNum > 0 ? "Selected as Mock Preference Mock P" + mockPNum + " (after completing 2 regular subjects)" : "Allocated available Mock Subject automatically (after completing 2 regular subjects)");
+                        expl.setUnknown(false);
+                        explanations.add(expl);
+
+                        pendingSlots.remove(targetSlot);
+                    }
+                }
+            }
+        }
 
         // ----------------------------------------------------
         // PHASE 2: WORKLOAD CAPACITY ALLOCATION FOR REAL FACULTY
@@ -1779,12 +2068,14 @@ public class SubjectService {
                             boolean isAlreadyTeachingSub = facultyUniqueSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).contains(subIdUpper);
                             if (!isAlreadyTeachingSub) {
                                 int currentUniqueSubs = facultyUniqueSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
-                                if (currentUniqueSubs + 1 > maxSubsVal) return false;
+                                int allowedTotalSubs = Math.max(maxSubsVal, maxRegVal + maxMockVal);
+                                if (currentUniqueSubs + 1 > allowedTotalSubs) return false;
 
                                 int currentRegCount = facultyRegularSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
                                 int currentMockCount = facultyMockSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
 
                                 if (sub.isMock()) {
+                                    if (currentRegCount < 2) return false;
                                     if (currentMockCount + 1 > maxMockVal) return false;
                                     if (hasPreviousMockAllocation(f.getId(), currentAcademicYear)) return false;
                                 } else {
@@ -1794,6 +2085,61 @@ public class SubjectService {
                             return true;
                         })
                         .sorted(candidateComparator)
+                        .collect(Collectors.toList());
+            }
+
+            // 3. If none, try assigning to real faculty satisfying strict constraints (prioritizing AUTO_RANDOM opt-in faculty)
+            if (eligible.isEmpty()) {
+                eligible = allFaculty.stream()
+                        .filter(f -> canTakeSectionStrict.test(f.getId(), sub))
+                        .sorted((f1, f2) -> {
+                            String f1Upper = f1.getId().toUpperCase();
+                            String f2Upper = f2.getId().toUpperCase();
+                            boolean auto1 = facultyPrefRankMap.getOrDefault(f1Upper, java.util.Collections.emptyMap()).containsKey("AUTO_RANDOM");
+                            boolean auto2 = facultyPrefRankMap.getOrDefault(f2Upper, java.util.Collections.emptyMap()).containsKey("AUTO_RANDOM");
+                            if (auto1 != auto2) return auto1 ? -1 : 1;
+
+                            return candidateComparator.compare(f1, f2);
+                        })
+                        .collect(Collectors.toList());
+            }
+
+            // 4. If none, try assigning to real faculty with relaxed same-year rule (prioritizing AUTO_RANDOM opt-in faculty)
+            if (eligible.isEmpty()) {
+                eligible = allFaculty.stream()
+                        .filter(f -> {
+                            String facIdUpper = f.getId().toUpperCase();
+                            int currentHours = facultyWorkloadHours.getOrDefault(facIdUpper, 0);
+                            if (currentHours + subHours > hoursLimitVal) return false;
+
+                            boolean isAlreadyTeachingSub = facultyUniqueSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).contains(subIdUpper);
+                            if (!isAlreadyTeachingSub) {
+                                int currentUniqueSubs = facultyUniqueSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
+                                int allowedTotalSubs = Math.max(maxSubsVal, maxRegVal + maxMockVal);
+                                if (currentUniqueSubs + 1 > allowedTotalSubs) return false;
+
+                                int currentRegCount = facultyRegularSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
+                                int currentMockCount = facultyMockSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
+
+                                if (sub.isMock()) {
+                                    if (currentRegCount < 2) return false;
+                                    if (currentMockCount + 1 > maxMockVal) return false;
+                                    if (hasPreviousMockAllocation(f.getId(), currentAcademicYear)) return false;
+                                } else {
+                                    if (currentRegCount + 1 > maxRegVal) return false;
+                                }
+                            }
+                            return true;
+                        })
+                        .sorted((f1, f2) -> {
+                            String f1Upper = f1.getId().toUpperCase();
+                            String f2Upper = f2.getId().toUpperCase();
+                            boolean auto1 = facultyPrefRankMap.getOrDefault(f1Upper, java.util.Collections.emptyMap()).containsKey("AUTO_RANDOM");
+                            boolean auto2 = facultyPrefRankMap.getOrDefault(f2Upper, java.util.Collections.emptyMap()).containsKey("AUTO_RANDOM");
+                            if (auto1 != auto2) return auto1 ? -1 : 1;
+
+                            return candidateComparator.compare(f1, f2);
+                        })
                         .collect(Collectors.toList());
             }
 
@@ -1807,7 +2153,8 @@ public class SubjectService {
                 int hoursAfter = facultyWorkloadHours.getOrDefault(chosenFacIdUpper, 0);
 
                 int pRank = facultyPrefRankMap.getOrDefault(chosenFacIdUpper, java.util.Collections.emptyMap()).getOrDefault(subIdUpper, 0);
-                String pStr = pRank > 0 ? "P" + pRank : "None";
+                boolean isAutoOptIn = facultyPrefRankMap.getOrDefault(chosenFacIdUpper, java.util.Collections.emptyMap()).containsKey("AUTO_RANDOM");
+                String pStr = pRank > 0 ? "P" + pRank : (isAutoOptIn ? "Auto" : "None");
 
                 AllocationExplanation expl = new AllocationExplanation();
                 expl.setSubjectId(sub.getId());
@@ -1819,7 +2166,7 @@ public class SubjectService {
                 expl.setPreference(pStr);
                 expl.setHoursBefore(hoursBefore);
                 expl.setHoursAfter(hoursAfter);
-                expl.setReasonSelected(pRank > 0 ? "Selected in Workload Balancing Phase (Preference " + pStr + ")" : "Selected in Workload Balancing Phase to satisfy capacity");
+                expl.setReasonSelected(pRank > 0 ? "Selected in Workload Balancing Phase (Preference " + pStr + ")" : (isAutoOptIn ? "Allocated automatically based on constraints (Completed Subjects Auto Opt-In)" : "Selected in Workload Balancing Phase to satisfy capacity"));
                 expl.setUnknown(false);
                 explanations.add(expl);
 
@@ -1874,12 +2221,13 @@ public class SubjectService {
                         long sectionsOfHolderSub = sectionAllocationRepository.findBySubjectId(holderSub.getId()).stream()
                                 .filter(x -> x.getFacultyId().equalsIgnoreCase(holderFac.getId()))
                                 .count();
+                        int allowedTotalSubs = Math.max(maxSubsVal, maxRegVal + maxMockVal);
                         int netUniqueSubs = facultyUniqueSubjects.get(holderIdUpper).size() - (sectionsOfHolderSub <= 1 ? 1 : 0);
-                        if (netUniqueSubs + 1 <= maxSubsVal) {
+                        if (netUniqueSubs + 1 <= allowedTotalSubs) {
                             int netReg = facultyRegularSubjects.get(holderIdUpper).size() - (!holderSub.isMock() && sectionsOfHolderSub <= 1 ? 1 : 0);
                             int netMock = facultyMockSubjects.get(holderIdUpper).size() - (holderSub.isMock() && sectionsOfHolderSub <= 1 ? 1 : 0);
                             if (unallocSub.isMock()) {
-                                if (netMock + 1 <= maxMockVal && !hasPreviousMockAllocation(holderFac.getId(), currentAcademicYear)) {
+                                if (netReg >= 2 && netMock + 1 <= maxMockVal && !hasPreviousMockAllocation(holderFac.getId(), currentAcademicYear)) {
                                     holderCanTakeUnalloc = true;
                                 }
                             } else {
@@ -1969,6 +2317,149 @@ public class SubjectService {
 
                     if (swapped) break;
                 }
+            }
+        }
+
+        // ----------------------------------------------------
+        // PHASE 3.5: GLOBAL WORKLOAD FAIRNESS & REBALANCING PHASE
+        // Check overall workload distribution across all real faculty after initial allocation phases.
+        // Shift sections from high-workload faculty to low-workload faculty to equalize workload hours
+        // while strictly enforcing all constraints (workload limit, max subjects, max regular, max mock, same-year rule).
+        // ----------------------------------------------------
+        boolean rebalanceProgress = true;
+        int maxRebalancePasses = 50;
+        int passCount = 0;
+
+        while (rebalanceProgress && passCount < maxRebalancePasses) {
+            rebalanceProgress = false;
+            passCount++;
+
+            List<AdminFaculty> highWorkloadFaculties = allFaculty.stream()
+                    .sorted((f1, f2) -> Integer.compare(
+                            facultyWorkloadHours.getOrDefault(f2.getId().toUpperCase(), 0),
+                            facultyWorkloadHours.getOrDefault(f1.getId().toUpperCase(), 0)))
+                    .collect(Collectors.toList());
+
+            List<AdminFaculty> lowWorkloadFaculties = allFaculty.stream()
+                    .sorted((f1, f2) -> Integer.compare(
+                            facultyWorkloadHours.getOrDefault(f1.getId().toUpperCase(), 0),
+                            facultyWorkloadHours.getOrDefault(f2.getId().toUpperCase(), 0)))
+                    .collect(Collectors.toList());
+
+            if (highWorkloadFaculties.isEmpty() || lowWorkloadFaculties.isEmpty()) break;
+
+            int topHours = facultyWorkloadHours.getOrDefault(highWorkloadFaculties.get(0).getId().toUpperCase(), 0);
+            int bottomHours = facultyWorkloadHours.getOrDefault(lowWorkloadFaculties.get(0).getId().toUpperCase(), 0);
+
+            if (topHours - bottomHours <= subHours) {
+                break; // Workload is already fairly balanced
+            }
+
+            boolean shifted = false;
+
+            for (AdminFaculty donorFac : highWorkloadFaculties) {
+                String donorIdUpper = donorFac.getId().toUpperCase();
+                int donorHours = facultyWorkloadHours.getOrDefault(donorIdUpper, 0);
+
+                List<SectionAllocation> donorSecAllocs = sectionAllocationRepository.findAll().stream()
+                        .filter(sa -> sa.getFacultyId() != null && sa.getFacultyId().equalsIgnoreCase(donorFac.getId()))
+                        .collect(Collectors.toList());
+
+                for (SectionAllocation sa : donorSecAllocs) {
+                    Subject sub = subjectRepository.findById(sa.getSubjectId()).orElse(null);
+                    if (sub == null) continue;
+
+                    String subIdUpper = sub.getId().toUpperCase();
+
+                    for (AdminFaculty recipientFac : lowWorkloadFaculties) {
+                        if (recipientFac.getId().equalsIgnoreCase(donorFac.getId())) continue;
+                        String recipientIdUpper = recipientFac.getId().toUpperCase();
+                        int recipientHours = facultyWorkloadHours.getOrDefault(recipientIdUpper, 0);
+
+                        if (donorHours - recipientHours <= subHours) continue;
+
+                        boolean recipientCanTake = false;
+                        boolean recipientAlreadyHasSub = facultyUniqueSubjects.getOrDefault(recipientIdUpper, java.util.Collections.emptySet()).contains(subIdUpper);
+
+                        if (recipientAlreadyHasSub) {
+                            if (recipientHours + subHours <= hoursLimitVal) {
+                                recipientCanTake = true;
+                            }
+                        } else {
+                            if (canTakeSectionStrict.test(recipientFac.getId(), sub)) {
+                                recipientCanTake = true;
+                            }
+                        }
+
+                        if (recipientCanTake) {
+                            // Perform section reassignment from donorFac to recipientFac
+                            sa.setFacultyId(recipientFac.getId());
+                            sectionAllocationRepository.save(sa);
+
+                            // Update tracking state
+                            facultyWorkloadHours.put(donorIdUpper, donorHours - subHours);
+                            facultyWorkloadHours.put(recipientIdUpper, recipientHours + subHours);
+
+                            facultyUniqueSections.getOrDefault(donorIdUpper, new java.util.LinkedHashSet<>()).remove(subIdUpper + "_" + sa.getSectionName().toUpperCase());
+                            facultyUniqueSections.computeIfAbsent(recipientIdUpper, k -> new java.util.LinkedHashSet<>()).add(subIdUpper + "_" + sa.getSectionName().toUpperCase());
+
+                            long donorRemainingCount = sectionAllocationRepository.findBySubjectId(sub.getId()).stream()
+                                    .filter(x -> x.getFacultyId().equalsIgnoreCase(donorFac.getId()))
+                                    .count();
+
+                            if (donorRemainingCount == 0) {
+                                facultyUniqueSubjects.getOrDefault(donorIdUpper, new java.util.LinkedHashSet<>()).remove(subIdUpper);
+                                if (sub.isMock()) {
+                                    facultyMockSubjects.getOrDefault(donorIdUpper, new java.util.LinkedHashSet<>()).remove(subIdUpper);
+                                } else {
+                                    facultyRegularSubjects.getOrDefault(donorIdUpper, new java.util.LinkedHashSet<>()).remove(subIdUpper);
+                                }
+                                SubjectAllocation oldSubAlloc = allocationRepository.findBySubjectIdAndFacultyId(sub.getId(), donorFac.getId());
+                                if (oldSubAlloc != null) {
+                                    allocationRepository.delete(oldSubAlloc);
+                                    createdSubjectAllocations.remove(oldSubAlloc);
+                                }
+                            }
+
+                            if (!recipientAlreadyHasSub) {
+                                SubjectAllocation newSubAlloc = new SubjectAllocation(sub.getId(), recipientFac.getId());
+                                newSubAlloc.setFinalized(false);
+                                allocationRepository.save(newSubAlloc);
+                                createdSubjectAllocations.add(newSubAlloc);
+
+                                facultyUniqueSubjects.computeIfAbsent(recipientIdUpper, k -> new java.util.LinkedHashSet<>()).add(subIdUpper);
+                                if (sub.isMock()) {
+                                    facultyMockSubjects.computeIfAbsent(recipientIdUpper, k -> new java.util.LinkedHashSet<>()).add(subIdUpper);
+                                } else {
+                                    facultyRegularSubjects.computeIfAbsent(recipientIdUpper, k -> new java.util.LinkedHashSet<>()).add(subIdUpper);
+                                }
+                            }
+
+                            int pRank = facultyPrefRankMap.getOrDefault(recipientIdUpper, java.util.Collections.emptyMap()).getOrDefault(subIdUpper, 0);
+                            String pStr = pRank > 0 ? "P" + pRank : "None";
+
+                            AllocationExplanation expl = new AllocationExplanation();
+                            expl.setSubjectId(sub.getId());
+                            expl.setSubjectName(sub.getName());
+                            expl.setSubjectYear(sub.getYear());
+                            expl.setSectionName(sa.getSectionName());
+                            expl.setFacultyId(recipientFac.getId());
+                            expl.setFacultyName(recipientFac.getName());
+                            expl.setPreference(pStr);
+                            expl.setHoursBefore(recipientHours);
+                            expl.setHoursAfter(recipientHours + subHours);
+                            expl.setReasonSelected("Reassigned in Fair Workload Balancing Phase from " + donorFac.getName() + " (was " + donorHours + " hrs) to balance overall faculty workload");
+                            expl.setUnknown(false);
+                            explanations.add(expl);
+
+                            shifted = true;
+                            rebalanceProgress = true;
+                            break;
+                        }
+                    }
+                    if (shifted) break;
+                }
+                if (shifted) break;
             }
         }
 
@@ -2099,6 +2590,141 @@ public class SubjectService {
             }
         }
         System.out.println("==========================================================================================");
+
+        // ----------------------------------------------------
+        // PHASE 5: FINAL AUDIT SAFETY CLEANUP
+        // Ensure no real faculty has a mock subject allocation without at least 2 regular subjects allocated
+        // ----------------------------------------------------
+        for (AdminFaculty f : allFaculty) {
+            String facIdUpper = f.getId().toUpperCase();
+            int regCount = facultyRegularSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()).size();
+            java.util.Set<String> mockSubs = new java.util.HashSet<>(facultyMockSubjects.getOrDefault(facIdUpper, java.util.Collections.emptySet()));
+            if (regCount < 2 && !mockSubs.isEmpty()) {
+                for (String mockSubId : mockSubs) {
+                    List<SubjectAllocation> mockSubAllocs = allocationRepository.findBySubjectId(mockSubId).stream()
+                            .filter(a -> a.getFacultyId().equalsIgnoreCase(f.getId()))
+                            .collect(Collectors.toList());
+                    allocationRepository.deleteAll(mockSubAllocs);
+
+                    List<SectionAllocation> mockSecAllocs = sectionAllocationRepository.findBySubjectId(mockSubId).stream()
+                            .filter(a -> a.getFacultyId().equalsIgnoreCase(f.getId()))
+                            .collect(Collectors.toList());
+                    sectionAllocationRepository.deleteAll(mockSecAllocs);
+
+                    facultyMockSubjects.get(facIdUpper).remove(mockSubId);
+                    facultyUniqueSubjects.get(facIdUpper).remove(mockSubId);
+                    explanations.removeIf(e -> e.getFacultyId().equalsIgnoreCase(f.getId()) && e.getSubjectId().equalsIgnoreCase(mockSubId));
+                }
+            }
+        }
+
+        // ----------------------------------------------------
+        // BUILD ALLOCATION SUMMARY REPORT & ZERO ALLOCATION EXPLANATIONS
+        // ----------------------------------------------------
+        AllocationSummaryReport summaryReport = new AllocationSummaryReport();
+        summaryReport.setAcademicYear(currentAcademicYear);
+        summaryReport.setDepartment(filterDepartment);
+        summaryReport.setSemester(filterSem);
+        summaryReport.setWorkloadLimit(hoursLimitVal);
+        summaryReport.setSubjectHours(subHours);
+        summaryReport.setMaxSubjects(maxSubsVal);
+        summaryReport.setMaxRegular(maxRegVal);
+        summaryReport.setMaxMock(maxMockVal);
+
+        List<FacultyReportRow> facultyRows = new ArrayList<>();
+        int totalFac = allFaculty.size();
+        int zeroCount = 0;
+        int sumSatisfaction = 0;
+        int totalHoursAll = 0;
+
+        for (AdminFaculty f : allFaculty) {
+            String fIdUpper = f.getId().toUpperCase();
+            FacultyReportRow row = new FacultyReportRow();
+            row.setFacultyId(f.getId());
+            row.setFacultyName(f.getName());
+
+            // Preferences list
+            List<FacultySubjectPreference> fPrefs = getPreferencesForFaculty(f.getId());
+            List<String> regPrefNames = fPrefs.stream()
+                .filter(p -> !p.isMock() && p.getSubjectId() != null && !"AUTO_RANDOM".equalsIgnoreCase(p.getSubjectId()))
+                .map(p -> {
+                    Subject s = findSubjectFlexible(p.getSubjectId(), currentAcademicYear);
+                    return s != null ? s.getName() + " (" + s.getId() + ")" : p.getSubjectId();
+                }).collect(Collectors.toList());
+            row.setPreferences(regPrefNames);
+
+            // Allocated sections list
+            List<String> allocSecs = sectionAllocationRepository.findByFacultyId(f.getId()).stream()
+                .map(sa -> sa.getSubjectId() + " Section " + sa.getSectionName())
+                .collect(Collectors.toList());
+            row.setAllocatedSections(allocSecs);
+
+            int hours = facultyWorkloadHours.getOrDefault(fIdUpper, 0);
+            row.setWorkloadHours(hours);
+            totalHoursAll += hours;
+
+            int distinctSubs = facultyUniqueSubjects.getOrDefault(fIdUpper, java.util.Collections.emptySet()).size();
+            row.setDistinctSubjectsCount(distinctSubs);
+
+            // Compute satisfaction percentage
+            int bestPrefRank = 999;
+            java.util.Set<String> allocatedSubs = facultyUniqueSubjects.getOrDefault(fIdUpper, java.util.Collections.emptySet());
+            for (String subIdUpper : allocatedSubs) {
+                int rank = facultyPrefRankMap.getOrDefault(fIdUpper, java.util.Collections.emptyMap()).getOrDefault(subIdUpper, 0);
+                if (rank > 0 && rank < bestPrefRank) bestPrefRank = rank;
+            }
+
+            int satisfaction = 0;
+            if (bestPrefRank == 1) satisfaction = 100;
+            else if (bestPrefRank == 2) satisfaction = 80;
+            else if (bestPrefRank == 3) satisfaction = 60;
+            else if (bestPrefRank == 4) satisfaction = 40;
+            else if (bestPrefRank == 5) satisfaction = 20;
+            else if (!allocatedSubs.isEmpty()) satisfaction = 50;
+
+            row.setSatisfactionPercentage(satisfaction);
+            sumSatisfaction += satisfaction;
+
+            // Zero Allocation Explanations
+            if (allocSecs.isEmpty()) {
+                zeroCount++;
+                List<String> zeroReasons = new ArrayList<>();
+                for (int i = 0; i < fPrefs.size(); i++) {
+                    FacultySubjectPreference p = fPrefs.get(i);
+                    if (p.isMock()) continue;
+                    String pSubId = p.getSubjectId();
+                    if (pSubId == null || "AUTO_RANDOM".equalsIgnoreCase(pSubId)) continue;
+                    Subject pSub = findSubjectFlexible(pSubId, currentAcademicYear);
+                    if (pSub == null) continue;
+
+                    String rej = getRejectionReason.apply(f.getId(), pSub);
+                    if (rej == null) {
+                        zeroReasons.add("Preference P" + (i + 1) + " (" + pSub.getName() + "): All sections were allocated to higher-priority faculty during preference rounds.");
+                    } else {
+                        zeroReasons.add("Preference P" + (i + 1) + " (" + pSub.getName() + "): " + rej);
+                    }
+                }
+                if (zeroReasons.isEmpty()) {
+                    zeroReasons.add("No preferences submitted or available sections were exhausted across all preference rounds.");
+                }
+                row.setZeroAllocationExplanations(zeroReasons);
+            }
+
+            facultyRows.add(row);
+        }
+
+        summaryReport.setFacultyReports(facultyRows);
+        summaryReport.setTotalFacultyCount(totalFac);
+        summaryReport.setZeroAllocationFacultyCount(zeroCount);
+        summaryReport.setAverageSatisfactionPercentage(totalFac > 0 ? (double) sumSatisfaction / totalFac : 0.0);
+        summaryReport.setAverageWorkloadHours(totalFac > 0 ? (double) totalHoursAll / totalFac : 0.0);
+
+        long totalSecCount = explanations.size();
+        long unknownSecCount = explanations.stream().filter(AllocationExplanation::isUnknown).count();
+        double cov = totalSecCount > 0 ? (((double) (totalSecCount - unknownSecCount)) / totalSecCount) * 100.0 : 100.0;
+        summaryReport.setAllocationCoveragePercentage(cov);
+
+        this.latestAllocationSummaryReport = summaryReport;
 
         return createdSubjectAllocations;
     }
@@ -2499,6 +3125,9 @@ public class SubjectService {
             .filter(p -> {
                 if (p.getSubjectId() == null) return false;
                 String subIdLower = p.getSubjectId().toLowerCase().trim();
+                if ("auto_random".equalsIgnoreCase(subIdLower)) {
+                    return true;
+                }
                 Subject sub = subMap.get(subIdLower);
                 if (sub == null) {
                     // Try to find a subject that starts with subIdLower + "_" (fallback for prefix mapping)
@@ -2704,5 +3333,64 @@ public class SubjectService {
                 }
             }
         }
+    }
+
+    public List<FacultySubjectPreference> getPreferencesForFaculty(String facultyId) {
+        if (facultyId == null) return new ArrayList<>();
+        String cleanId = facultyId.trim();
+        List<FacultySubjectPreference> list = preferenceRepository.findByFacultyIdIgnoreCaseOrderByIdAsc(cleanId);
+        if (list.isEmpty()) {
+            list = preferenceRepository.findAll().stream()
+                    .filter(p -> p.getFacultyId() != null && p.getFacultyId().trim().equalsIgnoreCase(cleanId))
+                    .sorted(java.util.Comparator.comparing(FacultySubjectPreference::getId))
+                    .collect(Collectors.toList());
+        }
+        return list;
+    }
+
+    public Subject findSubjectFlexible(String subId, String currentAcademicYear) {
+        if (subId == null || subId.trim().isEmpty() || "AUTO_RANDOM".equalsIgnoreCase(subId.trim())) return null;
+        String cleanId = subId.trim();
+
+        Subject sub = subjectRepository.findById(cleanId).orElse(null);
+        if (sub != null) return sub;
+
+        List<Subject> all = subjectRepository.findAll();
+        for (Subject s : all) {
+            if (s.getId() != null && s.getId().equalsIgnoreCase(cleanId)) return s;
+        }
+
+        String targetPrefix = cleanId.toLowerCase() + "_";
+        for (Subject s : all) {
+            if (s.getId() != null) {
+                String sIdLower = s.getId().toLowerCase();
+                if (sIdLower.startsWith(targetPrefix)) {
+                    if (currentAcademicYear == null || currentAcademicYear.isEmpty() || currentAcademicYear.equalsIgnoreCase(s.getAcademicYear())) {
+                        return s;
+                    }
+                }
+            }
+        }
+
+        for (Subject s : all) {
+            if (s.getId() != null && s.getId().toLowerCase().startsWith(targetPrefix)) {
+                return s;
+            }
+        }
+
+        int underscoreIdx = cleanId.indexOf('_');
+        if (underscoreIdx != -1) {
+            String baseCode = cleanId.substring(0, underscoreIdx);
+            for (Subject s : all) {
+                if (s.getId() != null) {
+                    String sId = s.getId();
+                    int sUnderscore = sId.indexOf('_');
+                    String sBase = (sUnderscore != -1) ? sId.substring(0, sUnderscore) : sId;
+                    if (sBase.equalsIgnoreCase(baseCode)) return s;
+                }
+            }
+        }
+
+        return null;
     }
 }

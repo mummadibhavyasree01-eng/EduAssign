@@ -57,6 +57,14 @@ public class DatabaseInitializer implements CommandLineRunner {
             System.err.println("Error cleaning up preferences: " + e.getMessage());
         }
 
+        // Keep only the first 5 preferences data in database
+        try {
+            jdbcTemplate.execute("DELETE FROM faculty_subject_preference WHERE id NOT IN (SELECT id FROM (SELECT id FROM faculty_subject_preference ORDER BY id ASC LIMIT 5) AS temp)");
+            System.out.println("--- Kept only first 5 preferences data in faculty_subject_preference ---");
+        } catch (Exception e) {
+            System.err.println("Error pruning preferences data: " + e.getMessage());
+        }
+
         // Deduplication logic commented out to prevent startup deletion of faculty data
         /*
         try {

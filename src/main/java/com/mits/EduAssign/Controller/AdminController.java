@@ -337,6 +337,11 @@ public class AdminController {
 	        return ResponseEntity.ok(subjectService.getLatestAllocationExplanations());
 	    }
 
+	    @GetMapping("/allocation-summary-report")
+	    public ResponseEntity<?> getAllocationSummaryReport() {
+	        return ResponseEntity.ok(subjectService.getLatestAllocationSummaryReport());
+	    }
+
 	    @PostMapping("/history/upload")
 	    public ResponseEntity<?> uploadAllocationHistory(@RequestParam("file") MultipartFile file) {
 	        try {

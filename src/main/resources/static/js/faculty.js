@@ -465,11 +465,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       // Filter facultyPreferences to only keep preferences whose subjectId belongs to the currently active subjects
-      facultyPreferences = facultyPreferences.filter(p => subjects.some(s => s.id === p.subjectId));
+      facultyPreferences = facultyPreferences.filter(p => p.subjectId && (p.subjectId.toUpperCase() === 'AUTO_RANDOM' || subjects.some(s => s.id === p.subjectId)));
 
-      // Separate normal and mock selections
-      selectedOrder = facultyPreferences.filter(p => !p.mock).map(p => p.subjectId);
-      selectedMockOrder = facultyPreferences.filter(p => p.mock).map(p => p.subjectId);
+      // Separate normal and mock selections (deduplicated)
+      selectedOrder = Array.from(new Set(facultyPreferences.filter(p => !p.mock).map(p => p.subjectId)));
+      selectedMockOrder = Array.from(new Set(facultyPreferences.filter(p => p.mock).map(p => p.subjectId)));
       originalOrder = [...selectedOrder];
       originalMockOrder = [...selectedMockOrder];
 
@@ -499,12 +499,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <table class="table" style="width: 100%; border-collapse: collapse; margin-bottom: 0;">
                   <tbody>
                     ${selectedOrder.map((subId, idx) => {
-                      const sub = subjects.find(s => s.id === subId) || { name: subId };
+                      let subName = subId;
+                      let typeLabel = 'Regular';
+                      if (subId === 'AUTO_RANDOM') {
+                        subName = 'Subjects Completed - Opted for Automatic / Random Allocation by Admin';
+                        typeLabel = 'Auto Allocation';
+                      } else {
+                        const sub = subjects.find(s => s.id === subId) || { name: subId };
+                        subName = sub.name;
+                      }
                       return `
                         <tr>
-                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); width: 30px; font-weight: 700; color: var(--secondary); font-size: 0.8rem;">${idx + 1}</td>
-                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); font-size: 0.82rem; color: var(--text-main);">${sub.name} <code style="color: var(--text-muted); font-size: 0.76rem;">(${subId})</code></td>
-                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); text-align: right;"><span class="badge" style="background: rgba(20, 184, 166, 0.1); color: var(--secondary); font-size: 0.72rem; padding: 2px 6px;">Regular</span></td>
+                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); width: 30px; font-weight: 700; color: var(--secondary); font-size: 0.8rem;">${subId === 'AUTO_RANDOM' ? 'A' : (idx + 1)}</td>
+                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); font-size: 0.82rem; color: var(--text-main);">${subName} <code style="color: var(--text-muted); font-size: 0.76rem;">(${subId})</code></td>
+                          <td style="padding: 8px 12px; border-bottom: 1px solid var(--panel-border); text-align: right;"><span class="badge" style="background: rgba(20, 184, 166, 0.1); color: var(--secondary); font-size: 0.72rem; padding: 2px 6px;">${typeLabel}</span></td>
                         </tr>
                       `;
                     }).join('')}
@@ -532,6 +540,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           ${prefListHtml}
         `;
       } else {
+        const regularSubjectsList = subjects.filter(s => s.mock !== true);
+        const availableRegularSubs = regularSubjectsList.filter(sub => {
+          const limitInfo = subjectPreferenceLimits[sub.id.toLowerCase()];
+          const isLimitReached = limitInfo && limitInfo.isLimitReached;
+          const isRegDisabledForYear = isRegularSelectionDisabledPerYear[sub.year] || false;
+          return !isLimitReached && !isRegDisabledForYear;
+        });
+        const noSubjectsSelectable = (regularSubjectsList.length === 0 || availableRegularSubs.length === 0);
+
         if (facultyPreferences.length > 0) {
           currentStep = 3;
           prefSelectionSection.style.display = 'none';
@@ -539,6 +556,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           previewSection.style.display = 'block';
           if (searchBoxWrapper) searchBoxWrapper.style.display = 'none';
           renderPreviewTable();
+        } else if (noSubjectsSelectable) {
+          currentStep = 1;
+          prefSelectionSection.style.display = 'block';
+          mockSection.style.display = 'none';
+          previewSection.style.display = 'none';
+          if (searchBoxWrapper) searchBoxWrapper.style.display = 'none';
+          renderSubjectPreferencesList(subjects);
         } else {
           currentStep = 1;
           prefSelectionSection.style.display = 'block';
@@ -556,28 +580,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function updateIndicators() {
+    const isAutoRandom = selectedOrder.includes('AUTO_RANDOM');
+    
+    // Update auto-assign radio button if present
+    const autoRadio = document.getElementById('auto-assign-radio');
+    if (autoRadio) {
+      autoRadio.checked = isAutoRandom;
+    }
+
     const subjectItems = document.querySelectorAll('#subject-checkboxes-container .subject-item');
     subjectItems.forEach(item => {
       const checkbox = item.querySelector('input[type="checkbox"]');
       const indicator = item.querySelector('.pref-index-indicator');
       if (!checkbox || !indicator) return;
-      const subId = checkbox.value;
-      const index = selectedOrder.indexOf(subId);
       
-      if (index !== -1) {
-        checkbox.checked = true;
-        item.classList.add('selected');
-        indicator.innerText = index + 1;
-      } else {
+      if (isAutoRandom) {
         checkbox.checked = false;
         item.classList.remove('selected');
         indicator.innerText = '';
+      } else {
+        const subId = checkbox.value;
+        const index = selectedOrder.indexOf(subId);
+        if (index !== -1) {
+          checkbox.checked = true;
+          item.classList.add('selected');
+          indicator.innerText = index + 1;
+        } else {
+          checkbox.checked = false;
+          item.classList.remove('selected');
+          indicator.innerText = '';
+        }
       }
     });
 
     const nextBtn = document.getElementById('preferences-next-btn');
     if (nextBtn) {
-      nextBtn.disabled = !isRegularSelectionDisabled && selectedOrder.length === 0;
+      if (isAutoRandom) {
+        nextBtn.disabled = false;
+      } else {
+        nextBtn.disabled = !isRegularSelectionDisabled && selectedOrder.length === 0;
+      }
     }
 
     renderRankedPreferences();
@@ -596,6 +638,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     rankedSection.style.display = 'block';
     container.innerHTML = '';
+
+    if (selectedOrder.includes('AUTO_RANDOM')) {
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.alignItems = 'center';
+      div.style.gap = '8px';
+      div.style.fontSize = '0.85rem';
+      div.style.color = 'var(--text-main)';
+      div.innerHTML = `
+        <span style="font-weight: 700; color: var(--secondary); background: rgba(20, 184, 166, 0.15); border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem;">A</span>
+        <span>Allocate subjects randomly by the admin <code style="color: var(--text-muted); font-size: 0.78rem;">(AUTO_RANDOM)</code></span>
+      `;
+      container.appendChild(div);
+      return;
+    }
 
     selectedOrder.forEach((subId, idx) => {
       const sub = subjects.find(s => s.id === subId);
@@ -620,9 +677,89 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const regularSubjects = list.filter(s => s.mock !== true);
 
-    if (regularSubjects.length === 0) {
-      listContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 30px;">No regular subjects available.</div>';
+    // Check if all regular subjects have reached selection limits or are disabled
+    const availableRegularSubjects = regularSubjects.filter(sub => {
+      const limitInfo = subjectPreferenceLimits[sub.id.toLowerCase()];
+      const isLimitReached = limitInfo && limitInfo.isLimitReached;
+      const isRegDisabledForYear = isRegularSelectionDisabledPerYear[sub.year] || false;
+      return !isLimitReached && !isRegDisabledForYear;
+    });
+
+    const allRegularLimitReached = (regularSubjects.length === 0 || availableRegularSubjects.length === 0);
+
+    if (allRegularLimitReached) {
+      if (selectedOrder.length === 0 || !selectedOrder.includes('AUTO_RANDOM')) {
+        selectedOrder = ['AUTO_RANDOM'];
+      }
+
+      const autoCard = document.createElement('div');
+      autoCard.className = 'completed-subjects-card animated-no-subjects-banner';
+      autoCard.style.padding = '24px 28px';
+      autoCard.style.background = 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(99, 102, 241, 0.12))';
+      autoCard.style.border = '2px solid var(--secondary)';
+      autoCard.style.borderRadius = 'var(--border-radius-md)';
+      autoCard.style.marginBottom = '24px';
+      autoCard.style.textAlign = 'center';
+      autoCard.style.boxShadow = '0 0 24px rgba(20, 184, 166, 0.25)';
+      
+      autoCard.innerHTML = `
+        <div style="font-size: 2.5rem; color: var(--secondary); margin-bottom: 12px;">
+          <i class="fas fa-exclamation-triangle fa-bounce"></i>
+        </div>
+        <h4 style="color: var(--text-main); font-weight: 700; margin-bottom: 8px; font-size: 1.1rem;">No Selectable Subjects Available</h4>
+        <p style="font-size: 0.92rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">
+          No subjects can be selected due to maximum selection limits reached, department/year restrictions, or zero available subjects.
+        </p>
+        <div style="display: inline-block; text-align: left; background: var(--panel-bg); padding: 16px 24px; border-radius: var(--border-radius-sm); border: 1.5px solid var(--secondary); box-shadow: 0 4px 16px rgba(0,0,0,0.25);">
+          <label style="display: flex; align-items: center; gap: 14px; cursor: pointer; font-size: 0.98rem; font-weight: 600; color: var(--text-main); margin: 0;">
+            <input type="radio" id="auto-assign-radio" name="auto_assign_option" value="AUTO_RANDOM" checked style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--secondary);">
+            <span>Allocate subjects randomly by the admin (All pending subjects will be allocated automatically)</span>
+          </label>
+        </div>
+      `;
+
+      listContainer.appendChild(autoCard);
+
+      const autoRadio = autoCard.querySelector('#auto-assign-radio');
+      if (autoRadio) {
+        autoRadio.addEventListener('change', () => {
+          if (autoRadio.checked) {
+            selectedOrder = ['AUTO_RANDOM'];
+            updateIndicators();
+          }
+        });
+      }
+
+      updateIndicators();
       return;
+    } else {
+      // Add opt-in card for Admin Random Allocation at top of subject preferences
+      const optInCard = document.createElement('div');
+      optInCard.className = 'auto-random-optin-card';
+      optInCard.style.padding = '14px 18px';
+      optInCard.style.background = 'rgba(99, 102, 241, 0.06)';
+      optInCard.style.border = '1.5px solid var(--primary)';
+      optInCard.style.borderRadius = 'var(--border-radius-md)';
+      optInCard.style.marginBottom = '18px';
+      
+      const isAutoSelected = selectedOrder.includes('AUTO_RANDOM');
+      optInCard.innerHTML = `
+        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 0.92rem; font-weight: 600; color: var(--text-main); margin: 0;">
+          <input type="radio" id="auto-assign-radio" name="auto_assign_option" value="AUTO_RANDOM" ${isAutoSelected ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary);">
+          <span><i class="fas fa-random" style="color: var(--primary); margin-right: 6px;"></i> Allocate subjects randomly by the admin (All pending subjects will be allocated automatically)</span>
+        </label>
+      `;
+      listContainer.appendChild(optInCard);
+
+      const autoRadio = optInCard.querySelector('#auto-assign-radio');
+      if (autoRadio) {
+        autoRadio.addEventListener('change', () => {
+          if (autoRadio.checked) {
+            selectedOrder = ['AUTO_RANDOM'];
+            updateIndicators();
+          }
+        });
+      }
     }
 
     // Group by year
@@ -691,23 +828,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) {
+            // Uncheck AUTO_RANDOM if subject is checked
+            selectedOrder = selectedOrder.filter(id => id !== 'AUTO_RANDOM');
+
             if (isLimitReached) {
               checkbox.checked = false;
               showToast('Selection Limit Completed', `This subject has reached its selection limit (${limitInfo.count}/${limitInfo.limit} faculty). Please choose another subject.`, 'warning');
               return;
             }
             
-            const winForYear = activeWindows.find(win => Number(win.year) === Number(sub.year)) || selectionWindow;
-            if (winForYear && winForYear.maxRegularPreferences) {
-              const sameYearSelectedCount = selectedOrder.filter(id => {
-                const s = subjects.find(x => x.id.toUpperCase() === id.toUpperCase());
-                return s && Number(s.year) === Number(sub.year);
-              }).length;
-              if (sameYearSelectedCount >= winForYear.maxRegularPreferences) {
-                checkbox.checked = false;
-                showToast('Limit Exceeded', `You can select a maximum of ${winForYear.maxRegularPreferences} regular preferences for Year ${sub.year}.`, 'warning');
-                return;
-              }
+            const maxRegLimit = (selectionWindow && selectionWindow.maxRegularPreferences != null) ? selectionWindow.maxRegularPreferences : 3;
+            if (selectedOrder.length >= maxRegLimit) {
+              checkbox.checked = false;
+              showToast('Limit Exceeded', `You can select a maximum of ${maxRegLimit} regular subject preference(s) in total across all years.`, 'warning');
+              return;
             }
             if (!selectedOrder.includes(sub.id)) {
               selectedOrder.push(sub.id);
@@ -749,6 +883,47 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (mockSubjects.length === 0) {
       container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 30px;">No mock subjects available.</div>';
+      return;
+    }
+
+    const availableMockSubjects = mockSubjects.filter(sub => {
+      const limitInfo = subjectPreferenceLimits[sub.id.toLowerCase()];
+      const isLimitReached = limitInfo && limitInfo.isLimitReached;
+      const isMockDisabledForYear = isMockSelectionDisabledPerYear[sub.year] || false;
+      return !isLimitReached && !isMockDisabledForYear;
+    });
+
+    const allMockLimitReached = (mockSubjects.length === 0 || availableMockSubjects.length === 0);
+
+    if (allMockLimitReached) {
+      if (selectedMockOrder.length === 0 || !selectedMockOrder.includes('AUTO_RANDOM')) {
+        selectedMockOrder = ['AUTO_RANDOM'];
+      }
+
+      const mockAutoCard = document.createElement('div');
+      mockAutoCard.className = 'completed-subjects-card animated-no-subjects-banner';
+      mockAutoCard.style.padding = '22px 26px';
+      mockAutoCard.style.background = 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(20, 184, 166, 0.12))';
+      mockAutoCard.style.border = '2px solid var(--primary)';
+      mockAutoCard.style.borderRadius = 'var(--border-radius-md)';
+      mockAutoCard.style.marginBottom = '20px';
+      mockAutoCard.style.textAlign = 'center';
+
+      mockAutoCard.innerHTML = `
+        <i class="fas fa-info-circle fa-bounce" style="font-size: 2.2rem; color: var(--primary); margin-bottom: 12px; display: block;"></i>
+        <h4 style="color: var(--text-main); font-weight: 700; margin-bottom: 8px;">All Mock Subjects Selection Limit Reached</h4>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
+          All available mock subjects have reached their selection limit or none fit current restrictions.
+        </p>
+        <div style="display: inline-block; text-align: left; background: var(--panel-bg); padding: 14px 22px; border-radius: var(--border-radius-sm); border: 1.5px solid var(--primary);">
+          <label style="display: flex; align-items: center; gap: 14px; cursor: pointer; font-size: 0.95rem; font-weight: 600; color: var(--text-main); margin: 0;">
+            <input type="radio" id="mock-auto-assign-radio" name="mock_auto_assign_option" value="AUTO_RANDOM" checked style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary);">
+            <span>Allocate subjects randomly by the admin (All pending subjects will be allocated automatically)</span>
+          </label>
+        </div>
+      `;
+
+      container.appendChild(mockAutoCard);
       return;
     }
 
@@ -803,17 +978,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast('Selection Limit Completed', `This mock subject has reached its selection limit (${limitInfo.count}/${limitInfo.limit} faculty). Please choose another subject.`, 'warning');
             return;
           }
-          const winForYear = activeWindows.find(win => Number(win.year) === Number(sub.year)) || selectionWindow;
-          if (winForYear && winForYear.maxMockPreferences) {
-            const sameYearMockSelectedCount = selectedMockOrder.filter(id => {
-              const s = subjects.find(x => x.id.toUpperCase() === id.toUpperCase());
-              return s && Number(s.year) === Number(sub.year);
-            }).length;
-            if (sameYearMockSelectedCount >= winForYear.maxMockPreferences) {
-              checkbox.checked = false;
-              showToast('Limit Exceeded', `You can select a maximum of ${winForYear.maxMockPreferences} mock preferences for Year ${sub.year}.`, 'warning');
-              return;
-            }
+          const maxMockLimit = (selectionWindow && selectionWindow.maxMockPreferences != null) ? selectionWindow.maxMockPreferences : 1;
+          if (selectedMockOrder.length >= maxMockLimit) {
+            checkbox.checked = false;
+            showToast('Limit Exceeded', `You can select a maximum of ${maxMockLimit} mock subject preference(s) in total across all years.`, 'warning');
+            return;
           }
           if (!selectedMockOrder.includes(sub.id)) {
             selectedMockOrder.push(sub.id);
@@ -864,17 +1033,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Normal preferences
     selectedOrder.forEach((subId, idx) => {
-      const sub = subjects.find(s => s.id === subId) || { name: 'Unknown Subject', sem: '', dep: '' };
+      let subName = subId;
+      let subCode = subId;
+      let typeLabel = 'Regular';
+      if (subId === 'AUTO_RANDOM') {
+        subName = 'Allocate subjects randomly by the admin';
+        subCode = 'AUTO_RANDOM';
+        typeLabel = 'Auto Allocation';
+      } else {
+        const sub = subjects.find(s => s.id === subId) || { name: 'Unknown Subject', sem: '', dep: '' };
+        subName = sub.name;
+      }
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="padding: 10px; border-bottom: 1px solid var(--panel-border); font-weight: 600; color: var(--secondary); font-size: 0.85rem;">
-          <span style="font-weight: 700; color: var(--secondary); background: rgba(20, 184, 166, 0.15); border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem;">${idx + 1}</span>
+          <span style="font-weight: 700; color: var(--secondary); background: rgba(20, 184, 166, 0.15); border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem;">${subId === 'AUTO_RANDOM' ? 'A' : (idx + 1)}</span>
         </td>
         <td style="padding: 10px; border-bottom: 1px solid var(--panel-border); font-size: 0.85rem;">
-          <strong>${sub.name}</strong> <code style="color: var(--text-muted); font-size: 0.78rem;">(${subId})</code>
+          <strong>${subName}</strong> <code style="color: var(--text-muted); font-size: 0.78rem;">(${subCode})</code>
         </td>
         <td style="padding: 10px; border-bottom: 1px solid var(--panel-border); font-size: 0.85rem;">
-          <span class="badge" style="background: rgba(20, 184, 166, 0.1); color: var(--secondary); font-size: 0.75rem; padding: 2px 6px; border-radius: 4px;">Preference</span>
+          <span class="badge" style="background: rgba(20, 184, 166, 0.1); color: var(--secondary); font-size: 0.75rem; padding: 2px 6px; border-radius: 4px;">${typeLabel}</span>
         </td>
       `;
       tbody.appendChild(tr);
@@ -906,7 +1085,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const confirmBtn = document.getElementById('preferences-confirm-btn');
     if (!confirmBtn) return;
     
-    if (!hasChanges()) {
+    if (!hasChanges() && !selectedOrder.includes('AUTO_RANDOM')) {
       confirmBtn.disabled = true;
       confirmBtn.innerHTML = '<i class="fas fa-check-circle"></i> Saved (No Changes)';
       confirmBtn.style.opacity = '0.6';
@@ -999,13 +1178,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       
       const hasMockAvailable = subjects.some(s => s.mock === true);
-      if (facultyHasMockAllocation || !hasMockAvailable) {
+      const isAutoRandom = selectedOrder.includes('AUTO_RANDOM');
+
+      if (isAutoRandom || facultyHasMockAllocation || !hasMockAvailable) {
         currentStep = 3;
         prefSelectionSection.style.display = 'none';
         mockSection.style.display = 'none';
         previewSection.style.display = 'block';
         if (searchBoxWrapper) searchBoxWrapper.style.display = 'none';
-        selectedMockOrder = [];
+        if (isAutoRandom) {
+          selectedMockOrder = [];
+        }
         renderPreviewTable();
       } else {
         currentStep = 2;
@@ -1039,13 +1222,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (mockSubmitBtn) {
     mockSubmitBtn.addEventListener('click', () => {
+      const isAutoRandom = selectedOrder.includes('AUTO_RANDOM') || selectedMockOrder.includes('AUTO_RANDOM');
       const hasMockAvailable = subjects.some(s => s.mock === true);
       const hasAvailableMock = subjects.some(s => {
         if (!s.mock) return false;
         const limitInfo = subjectPreferenceLimits[s.id.toLowerCase()];
         return !limitInfo || !limitInfo.isLimitReached;
       });
-      if (selectedMockOrder.length === 0 && !facultyHasMockAllocation && hasMockAvailable && hasAvailableMock) {
+      if (!isAutoRandom && selectedMockOrder.length === 0 && !facultyHasMockAllocation && hasMockAvailable && hasAvailableMock) {
         showToast('Mock Required', 'Every faculty must select at least one subject for Mock.', 'warning');
         return;
       }
@@ -1065,7 +1249,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       prefSelectionSection.style.display = 'block';
       mockSection.style.display = 'none';
       previewSection.style.display = 'none';
-      if (searchBoxWrapper) searchBoxWrapper.style.display = 'block';
+      
+      const regularSubjectsList = subjects.filter(s => s.mock !== true);
+      const availableRegularSubs = regularSubjectsList.filter(sub => {
+        const limitInfo = subjectPreferenceLimits[sub.id.toLowerCase()];
+        const isLimitReached = limitInfo && limitInfo.isLimitReached;
+        const isRegDisabledForYear = isRegularSelectionDisabledPerYear[sub.year] || false;
+        return !isLimitReached && !isRegDisabledForYear;
+      });
+      const noSubjectsSelectable = (regularSubjectsList.length === 0 || availableRegularSubs.length === 0);
+
+      if (searchBoxWrapper) searchBoxWrapper.style.display = noSubjectsSelectable ? 'none' : 'block';
       document.getElementById('subject-search').value = '';
       renderSubjectPreferencesList(subjects);
       updateStepIndicators();
@@ -1081,13 +1275,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    const isAutoRandom = selectedOrder.includes('AUTO_RANDOM') || selectedMockOrder.includes('AUTO_RANDOM');
     const hasMockAvailable = subjects.some(s => s.mock === true);
     const hasAvailableMock = subjects.some(s => {
       if (!s.mock) return false;
       const limitInfo = subjectPreferenceLimits[s.id.toLowerCase()];
       return !limitInfo || !limitInfo.isLimitReached;
     });
-    if (selectedMockOrder.length === 0 && !facultyHasMockAllocation && hasMockAvailable && hasAvailableMock) {
+    if (!isAutoRandom && selectedMockOrder.length === 0 && !facultyHasMockAllocation && hasMockAvailable && hasAvailableMock) {
       showToast('Mock Required', 'Every faculty must select at least one subject for Mock.', 'warning');
       return;
     }
@@ -1098,12 +1293,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
     }
 
-    // Map combined list
+    // Map combined list (deduplicated)
     const payload = [];
-    selectedOrder.forEach(id => {
+    Array.from(new Set(selectedOrder)).forEach(id => {
       payload.push({ subjectId: id, mock: false });
     });
-    selectedMockOrder.forEach(id => {
+    Array.from(new Set(selectedMockOrder)).forEach(id => {
       payload.push({ subjectId: id, mock: true });
     });
 
@@ -1116,9 +1311,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       const updatedPrefs = await apiRequest(`/faculty/preferences/${currentUser.id}`);
       facultyPreferences = Array.isArray(updatedPrefs) ? updatedPrefs : [];
-      facultyPreferences = facultyPreferences.filter(p => subjects.some(s => s.id === p.subjectId));
-      selectedOrder = facultyPreferences.filter(p => !p.mock).map(p => p.subjectId);
-      selectedMockOrder = facultyPreferences.filter(p => p.mock).map(p => p.subjectId);
+      facultyPreferences = facultyPreferences.filter(p => p.subjectId && (p.subjectId.toUpperCase() === 'AUTO_RANDOM' || subjects.some(s => s.id === p.subjectId)));
+      selectedOrder = Array.from(new Set(facultyPreferences.filter(p => !p.mock).map(p => p.subjectId)));
+      selectedMockOrder = Array.from(new Set(facultyPreferences.filter(p => p.mock).map(p => p.subjectId)));
       originalOrder = [...selectedOrder];
       originalMockOrder = [...selectedMockOrder];
       

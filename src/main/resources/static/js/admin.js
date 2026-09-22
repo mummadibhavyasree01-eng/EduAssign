@@ -247,18 +247,22 @@ document.addEventListener('DOMContentLoaded', () => {
       populateFilterDropdowns();
       populateCustomPrefDropdown();
 
+      const selectionWindow = await apiRequest('/adminfaculty/deadline').catch(() => null);
+      const activeWinList = Array.isArray(selectionWindow) ? selectionWindow.filter(w => w.active) : (selectionWindow && selectionWindow.active ? [selectionWindow] : []);
+      const activeWin = activeWinList[0] || null;
+      const defaultAcadYear = (activeWin && activeWin.academicYear) ? activeWin.academicYear : ((academicYears && academicYears.length > 0) ? academicYears[0].year : '2026-27');
+
       const academicYearInput = document.getElementById('pref-academic-year-input');
       if (academicYearInput && !academicYearInput.value) {
-        academicYearInput.value = '2025-26';
+        academicYearInput.value = defaultAcadYear;
       }
-      const academicYearVal = academicYearInput ? academicYearInput.value.trim() : '2025-26';
+      const academicYearVal = academicYearInput ? academicYearInput.value.trim() : defaultAcadYear;
 
-      const [faculty, subjects, allPreferences, sectionAllocs, selectionWindow] = await Promise.all([
+      const [faculty, subjects, allPreferences, sectionAllocs] = await Promise.all([
         apiRequest('/adminfaculty/viewfaculty'),
         apiRequest('/subject/viewAll'),
         apiRequest(`/faculty/preferences/by-academic-year?academicYear=${encodeURIComponent(academicYearVal)}`),
-        apiRequest('/adminfaculty/section-allocations'),
-        apiRequest('/adminfaculty/deadline')
+        apiRequest('/adminfaculty/section-allocations')
       ]);
 
       const facultyMap = {};
@@ -687,6 +691,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const getSubjectOrFallback = (subId) => {
       if (!subId) return null;
+      if (subId.toUpperCase() === 'AUTO_RANDOM') {
+        return {
+          id: 'AUTO_RANDOM',
+          name: 'Allocate subjects randomly by the admin',
+          dep: deptVal || 'ALL',
+          sem: semVal ? Number(semVal) : 1,
+          year: yearVal && yearVal !== 'ALL' ? Number(yearVal) : 1,
+          academicYear: academicYearVal || ''
+        };
+      }
       const sId = subId.toLowerCase();
       if (data.subjectsMap[sId]) return data.subjectsMap[sId];
       
@@ -908,11 +922,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const matchingSubjectIds = new Set(matchingSubjects.map(s => s.id.toLowerCase()));
 
-    // Find which faculty have submitted preferences for these filtered subjects
+    // Find which faculty have submitted preferences for these filtered subjects or AUTO_RANDOM
     const submittedFacultyIds = new Set();
     data.allPreferences.forEach(p => {
-      if (p.subjectId && matchingSubjectIds.has(p.subjectId.toLowerCase())) {
-        submittedFacultyIds.add(p.facultyId.toLowerCase());
+      if (p.subjectId && p.facultyId) {
+        const facIdLower = p.facultyId.toLowerCase().trim();
+        if (p.subjectId.toUpperCase() === 'AUTO_RANDOM' || matchingSubjectIds.has(p.subjectId.toLowerCase().trim())) {
+          submittedFacultyIds.add(facIdLower);
+        }
       }
     });
 
@@ -922,23 +939,22 @@ document.addEventListener('DOMContentLoaded', () => {
       ? Number(data.selectionWindow.maxSubjectsAllocated)
       : 3;
 
-    const pendingFaculty = (matchingSubjects.length === 0) 
-      ? [] 
-      : data.facultyList.filter(f => {
-          if (!f.id) return false;
-          const hasPrefs = submittedFacultyIds.has(f.id.toLowerCase());
-          if (hasPrefs) return false;
+    const pendingFaculty = data.facultyList.filter(f => {
+      if (!f.id) return false;
+      const fIdLower = f.id.toLowerCase().trim();
+      const hasPrefs = submittedFacultyIds.has(fIdLower);
+      if (hasPrefs) return false;
 
-          const facAllocs = data.sectionAllocs.filter(sa => {
-            if (!sa.facultyId || sa.facultyId.toLowerCase() !== f.id.toLowerCase()) return false;
-            const sub = data.subjectsMap[sa.subjectId.toLowerCase()];
-            return sub && sub.academicYear && sub.academicYear.toLowerCase() === academicYearVal.toLowerCase();
-          });
-          const uniqueAllocatedSubjectIds = new Set(facAllocs.map(sa => sa.subjectId.toLowerCase()));
-          const isFullyAllocated = uniqueAllocatedSubjectIds.size >= maxSubjectsLimit;
+      const facAllocs = data.sectionAllocs.filter(sa => {
+        if (!sa.facultyId || sa.facultyId.toLowerCase().trim() !== fIdLower) return false;
+        const sub = data.subjectsMap[sa.subjectId.toLowerCase().trim()];
+        return sub && sub.academicYear && sub.academicYear.toLowerCase().trim() === academicYearVal.toLowerCase();
+      });
+      const uniqueAllocatedSubjectIds = new Set(facAllocs.map(sa => sa.subjectId.toLowerCase().trim()));
+      const isFullyAllocated = uniqueAllocatedSubjectIds.size >= maxSubjectsLimit;
 
-          return !isFullyAllocated;
-        });
+      return !isFullyAllocated;
+    });
 
     if (pendingFaculty.length === 0) {
       tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--success); padding: 15px;"><i class="fas fa-check-circle"></i> All faculty submitted!</td></tr>`;
@@ -4366,6 +4382,16 @@ document.getElementById('deadline-sem').addEventListener('change', updateSubject
 
     const getSubjectOrFallback = (subId) => {
       if (!subId) return null;
+      if (subId.toUpperCase() === 'AUTO_RANDOM') {
+        return {
+          id: 'AUTO_RANDOM',
+          name: 'Allocate subjects randomly by the admin',
+          dep: deptVal || 'ALL',
+          sem: semVal ? Number(semVal) : 1,
+          year: yearVal && yearVal !== 'ALL' ? Number(yearVal) : 1,
+          academicYear: ''
+        };
+      }
       const sId = subId.toLowerCase();
       if (data.subjectsMap[sId]) return data.subjectsMap[sId];
       
